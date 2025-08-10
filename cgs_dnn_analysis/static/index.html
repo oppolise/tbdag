@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CGS-DNN Analysis — Runtime (domain 0..12, lane 1.3x)</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+    :root{--sidebar-bg:#fafafa;--content-bg:#ffffff;--border-color:#e0e0e0;--text-color-primary:#212121;--text-color-secondary:#757575;--table-header-bg:#f08c38;--highlight-bg:#e6ffed}
+    html,body{height:100%;margin:0;font-family:Roboto, sans-serif}
+    body{background:var(--content-bg);color:var(--text-color-primary);display:flex;height:100vh;overflow:hidden}
+    #plugin-container{display:flex;width:100%;height:100%}
+    #sidebar{width:300px;background:var(--sidebar-bg);border-right:1px solid var(--border-color);padding:18px;box-sizing:border-box;display:flex;flex-direction:column}
+    .control-group{margin-bottom:20px}
+    .control-group label{font-size:12px;color:var(--text-color-secondary);text-transform:uppercase;display:block;margin-bottom:8px}
+    select{width:100%;padding:8px;font-size:14px;border-radius:6px;border:1px solid #ccc;background:white}
+    #content-pane{flex:1;padding:22px;overflow:auto}
+    #content-title{margin-top:0;color:var(--text-color-secondary);font-weight:500}
+    .card{border:1px solid var(--border-color);border-radius:10px;margin-bottom:18px;background:white;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
+    .card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color);background:#fafafa;border-top-left-radius:10px;border-top-right-radius:10px}
+    .card-title{margin:0;font-weight:600}
+    .card-controls{display:flex;gap:8px;align-items:center}
+    .card-controls button{padding:6px 10px;border-radius:6px;border:1px solid #ddd;background:white;cursor:pointer}
+    .card-body{padding:12px 12px 18px 12px}
+     .legend{display:flex;align-items:center;gap:12px}
+     .legend-item{display:flex;align-items:center;gap:6px;color:var(--text-color-secondary);font-size:12px}
+     .legend-swatch{width:12px;height:12px;border-radius:3px;border:1px solid #ddd}
+    .runtime-wrapper{overflow-x:auto;padding-bottom:6px}
+    .runtime-svg{background:#fff;display:block}
+    .lane-label{font-size:13px;fill:var(--text-color-secondary)}
+    .tick-text{font-size:11px;fill:var(--text-color-secondary)}
+    .event-box{stroke:#495057;vector-effect: non-scaling-stroke;cursor:pointer}
+    .cm-box{fill:#b9defa;stroke:#7fb8e0}
+    .cp-box{fill:#f8c9b3;stroke:#e28a2b}
+    .block-label{fill:#111;font-weight:600;pointer-events:none;font-size:10px}
+    .hidden-label{display:none}
+    .timing-table{width:100%;border-collapse:collapse;border:1px solid #ddd}
+    .timing-table th,.timing-table td{border:1px solid #ddd;padding:10px 12px;text-align:left}
+    .timing-table thead th{background-color:var(--table-header-bg);color:white;font-weight:500}
+    .highlight-min{background-color:var(--highlight-bg);font-weight:bold}
+    @media (max-width:900px){#sidebar{width:240px}}
+  </style>
+</head>
+<body>
+  <div id="plugin-container">
+    <div id="sidebar">
+      <div class="control-group">
+        <label for="run-selector">Runs</label>
+        <select id="run-selector"><option>Loading runs...</option></select>
+      </div>
+      <div class="control-group" id="worker-selector-group">
+        <label for="worker-selector">Workers</label>
+        <select id="worker-selector"><option>Select a run first</option></select>
+      </div>
+      <div class="control-group">
+        <label for="view-selector">Views</label>
+        <select id="view-selector">
+          <option value="dag">DAG Graph</option>
+          <option value="table">Communication Timing</option>
+          <option value="runtime" selected>Runtime</option>
+        </select>
+      </div>
+    </div>
+
+    <main id="content-pane">
+      <h2 id="content-title">Select a run and worker to begin.</h2>
+      <div id="content-display"></div>
+    </main>
+  </div>
+
+  <div id="d3-tooltip" style="position:absolute;pointer-events:none;padding:8px 10px;background:rgba(0,0,0,0.78);color:#fff;border-radius:6px;font-size:12px;display:none;z-index:9999"></div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const runSelector = document.getElementById('run-selector');
+    const workerSelector = document.getElementById('worker-selector');
+    const viewSelector = document.getElementById('view-selector');
+    const workerSelectorGroup = document.getElementById('worker-selector-group');
+    const contentTitle = document.getElementById('content-title');
+    const contentDisplay = document.getElementById('content-display');
+    const tooltip = d3.select('#d3-tooltip');
+
+    let allRuns = [], workersByRun = {}, opTreeDataCache = {}, commTimingCache = null;
+    let currentState = { run: null, worker: null, view: 'runtime' };
+
+    runSelector.addEventListener('change', handleRunChange);
+    workerSelector.addEventListener('change', handleWorkerChange);
+    viewSelector.addEventListener('change', handleViewChange);
+
+    async function initialize() {
+      try {
+        const res = await fetch('./runs');
+        const d = await res.json();
+        allRuns = d.runs || [];
+        populateRunsSelector(allRuns);
+        if (allRuns.length) { runSelector.selectedIndex = 0; await handleRunChange(); }
+        else { runSelector.innerHTML = '<option>No runs found</option>'; workerSelector.innerHTML = '<option>No runs found</option>'; contentTitle.textContent = 'No profiler data found.'; }
+      } catch (err) { contentTitle.textContent = `Error loading initial data: ${err.message}`; }
+    }
+
+    function populateRunsSelector(names) {
+      runSelector.innerHTML = '';
+      names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; runSelector.appendChild(o); });
+    }
+
+    async function fetchAndPopulateWorkers(runName) {
+      if (workersByRun[runName]) return populateWorkersSelector(workersByRun[runName]);
+      workerSelector.innerHTML = '<option>Loading workers...</option>';
+      try {
+        const res = await fetch(`./workers?run=${encodeURIComponent(runName)}`);
+        const ws = await res.json();
+        workersByRun[runName] = ws;
+        populateWorkersSelector(ws);
+      } catch (err) { workerSelector.innerHTML = '<option>Failed to load</option>'; }
+    }
+
+    function populateWorkersSelector(names) {
+      workerSelector.innerHTML = '';
+      if (names && names.length) {
+        names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; workerSelector.appendChild(o); });
+      } else workerSelector.innerHTML = '<option>No workers found</option>';
+    }
+
+    async function fetchOpTreeData(runName, workerName) {
+      const key = `${runName}__${workerName}`;
+      if (opTreeDataCache[key]) return opTreeDataCache[key];
+      try {
+        const res = await fetch(`./runtime?run=${encodeURIComponent(runName)}&worker=${encodeURIComponent(workerName)}`);
+        const d = await res.json();
+        opTreeDataCache[key] = d;
+        return d;
+      } catch (err) { console.error(err); return { error: err.message }; }
+    }
+
+    async function handleRunChange() {
+      currentState.run = runSelector.value; currentState.worker = null; opTreeDataCache = {}; commTimingCache = null;
+      await fetchAndPopulateWorkers(currentState.run);
+      if (workerSelector.options.length) { workerSelector.selectedIndex = 0; await handleWorkerChange(); } else renderContent();
+    }
+
+    async function handleWorkerChange() {
+      currentState.worker = workerSelector.value; await renderContent();
+    }
+
+    function handleViewChange() {
+      currentState.view = viewSelector.value;
+      if (currentState.view === 'table') {
+        workerSelectorGroup.style.display = 'none';
+        runSelector.style.display = 'none';
+        document.querySelector('label[for="run-selector"]').style.display = 'none';
+      } else {
+        workerSelectorGroup.style.display = 'block';
+        runSelector.style.display = 'block';
+        document.querySelector('label[for="run-selector"]').style.display = 'block';
+      }
+      renderContent();
+    }
+
+    async function renderContent() {
+      if (currentState.view !== 'table' && (!currentState.run || !currentState.worker)) {
+        contentDisplay.innerHTML = '<p>Please make a selection.</p>'; return;
+      }
+      contentDisplay.innerHTML = '<p>Loading...</p>';
+      if (currentState.view === 'dag') { contentTitle.textContent = `DAG for ${currentState.worker}`; await renderDagView(); }
+      else if (currentState.view === 'runtime') { contentTitle.textContent = `Runtime for ${currentState.worker}`; await renderRuntimeView(); }
+      else { contentTitle.textContent = `Communication Timing Comparison`; await renderCommunicationTable(); }
+    }
+
+    async function renderSingleWorkerView() {
+      const data = await fetchOpTreeData(currentState.run, currentState.worker);
+      if (!data || data.error) { contentDisplay.innerHTML = `<p style="color:red">Failed to load data. ${data ? data.error : ''}</p>`; return; }
+      contentDisplay.innerHTML = `<pre style="white-space:pre-wrap;font-family:monospace;background:#f8f9fa;padding:12px;border-radius:6px">${JSON.stringify(data, null, 2)}</pre>`;
+    }
+
+    // ===== DAG renderer (ไม่อิงแกนเวลา; แบ่งบน/ล่าง; ขนาดตาม dur) =====
+    async function renderDagView() {
+      try {
+        const res = await fetch(`./dag?run=${encodeURIComponent(currentState.run)}&worker=${encodeURIComponent(currentState.worker)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const stepKeys = Object.keys(data).sort((a,b)=> Number(a)-Number(b));
+        contentDisplay.innerHTML = '';
+
+        stepKeys.forEach(stepKey => {
+          const step = data[stepKey];
+          const nodes = step.nodes || []; const edges = step.edges || [];
+
+          const margin = {top:20,right:24,bottom:20,left:24};
+          const width = Math.max(1100, window.innerWidth - 260);
+          const height = 360;
+          const laneY = { top: 110, bottom: 270 };
+
+          // card
+          const card = document.createElement('div'); card.className = 'card';
+          const header = document.createElement('div'); header.className='card-header';
+          const controls = document.createElement('div'); controls.className='card-controls';
+          const legend = document.createElement('div'); legend.className='legend';
+          legend.innerHTML = `
+            <div class="legend-item"><span class="legend-swatch" style="background:#b9defa;border-color:#7fb8e0"></span>Computation</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#f8c9b3;border-color:#e28a2b"></span>Communication</div>
+          `;
+          controls.appendChild(legend);
+          const btnReset = document.createElement('button'); btnReset.textContent = 'Reset zoom'; controls.appendChild(btnReset);
+          header.innerHTML = `<h4 class="card-title">Step ${stepKey}</h4>`;
+          header.appendChild(controls);
+          const body = document.createElement('div'); body.className='card-body';
+          const svg = d3.select(body).append('svg').attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+          card.appendChild(header); card.appendChild(body);
+          contentDisplay.appendChild(card);
+
+          // capture area for zoom
+          svg.append('rect').attr('x',0).attr('y',0).attr('width',width).attr('height',height).style('fill','transparent');
+          const gMain = svg.append('g').attr('class','dag-inner');
+
+          // scale ขนาดโหนดจาก dur
+          const maxDur = d3.max(nodes.map(n => n.dur || 0)) || 1;
+          const durScale = d3.scaleLinear().domain([0, maxDur]).range([70, 260]);
+          const nodeHeight = 34, radius = 8;
+          const nodeWidth = n => durScale(n.dur || 0);
+          const nodesById = new Map(nodes.map(n => [n.id, n]));
+
+          // จัดลำดับ lane บน (computation) ตามลำดับที่ส่งมาจาก API (forward..loss..backward..optimizer)
+          const topNodes = nodes.filter(n => n.lane === 'top');
+          const bottomNodes = nodes.filter(n => n.lane === 'bottom');
+          const gap = 46; // เว้นระยะให้ลูกศรเห็นชัด
+
+          function layoutLinearX(list, startX) {
+            const positions = new Map();
+            let x = startX;
+            list.forEach(n => {
+              const w = nodeWidth(n);
+              const cx = x + w/2;
+              positions.set(n.id, cx);
+              x += w + gap;
+            });
+            return positions;
+          }
+          const topPositions = layoutLinearX(topNodes, margin.left + 70);
+
+          // จัดตำแหน่ง lane ล่าง (communication) จากลำดับ anchor บน
+          // - broadcast: ยึดกับ forward แรก (edge kind=bcast_to_first_forward)
+          // - all_reduce: ยึดกับ backward ของตัวเอง (edge kind=backward_to_allreduce)
+          const commAnchors = [];
+          edges.forEach(e => {
+            if (e.kind === 'bcast_to_first_forward') {
+              commAnchors.push({comm: e.source, anchor: e.target, type: 'broadcast'});
+            } else if (e.kind === 'backward_to_allreduce') {
+              commAnchors.push({comm: e.target, anchor: e.source, type: 'allreduce'});
+            }
+          });
+          // map id -> desired anchor X (จาก lane บน)
+          const desired = new Map();
+          commAnchors.forEach(({comm, anchor, type}) => {
+            const ax = topPositions.get(anchor) || (margin.left + 70);
+            let targetX = ax;
+            if (type === 'broadcast') {
+              // วางไว้ซ้ายกว่า forward แรกเล็กน้อย
+              const n = nodesById.get(comm); const w = nodeWidth(n);
+              targetX = (ax - (nodeWidth(nodesById.get(anchor)) / 2)) - 30 - w/2;
+            }
+            desired.set(comm, targetX);
+          });
+          // สร้างลิสต์ bottom ตาม anchorX แล้วไล่เลื่อนแก้ชน
+          const bottomOrder = bottomNodes.map(n => ({n, ax: desired.get(n.id) ?? (margin.left + 70)}))
+                                         .sort((a,b)=> a.ax - b.ax);
+          const bottomPositions = new Map();
+          let lastRight = margin.left + 40;
+          bottomOrder.forEach(({n, ax}) => {
+            const w = nodeWidth(n);
+            let cx = Math.max(ax, lastRight + gap + w/2);
+            bottomPositions.set(n.id, cx);
+            lastRight = cx + w/2;
+          });
+
+          const nodeIdxMap = new Map();
+          let ti=0, bi=0;
+          nodes.forEach(n => {
+            if (n.lane==='top') { nodeIdxMap.set(n.id, {x: topPositions.get(n.id), y: laneY.top}); }
+            else { nodeIdxMap.set(n.id, {x: bottomPositions.get(n.id), y: laneY.bottom}); }
+          });
+
+          // edges (ลูกศร)
+          const defs = svg.append('defs');
+          defs.append('marker').attr('id','arrow').attr('viewBox','0 0 10 10').attr('refX',8).attr('refY',5).attr('markerWidth',7).attr('markerHeight',7).attr('orient','auto')
+            .append('path').attr('d','M 0 0 L 10 5 L 0 10 z').attr('fill','#999');
+
+          edges.forEach(e => {
+            const s = nodeIdxMap.get(e.source); const t = nodeIdxMap.get(e.target);
+            if (!s || !t) return;
+            gMain.append('path')
+              .attr('d', `M${s.x},${s.y} C ${s.x},${(s.y+t.y)/2} ${t.x},${(s.y+t.y)/2} ${t.x},${t.y}`)
+              .attr('fill','none').attr('stroke','#b4b4b4').attr('stroke-width',1.6)
+              .attr('marker-end','url(#arrow)');
+          });
+
+          // nodes
+          const g = gMain.append('g');
+          const nodeText = [];
+          nodes.forEach(n => {
+            const pos = nodeIdxMap.get(n.id); if (!pos) return;
+            const w = nodeWidth(n);
+            const x = pos.x - w/2; const y = pos.y - nodeHeight/2;
+            const cls = n.category === 'computation' ? 'cm-box' : 'cp-box';
+            g.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',nodeHeight).attr('rx',radius).attr('ry',radius).attr('class',cls);
+            nodeText.push({id:n.id, x:pos.x, y:pos.y, data:n});
+          });
+          const texts = g.selectAll('text')
+            .data(nodeText, d=>d.id)
+            .enter()
+            .append('text')
+            .attr('x', d=>d.x)
+            .attr('y', d=>d.y+4)
+            .attr('text-anchor','middle')
+            .attr('class','block-label')
+            .text(d => d.data.label || d.id);
+
+          // zoom/pan (เหมือน runtime แบบง่าย)
+          function updateLabelVisibility(k){
+            texts.each(function(d){
+              const show = nodeWidth(d.data) * k >= 48;
+              d3.select(this).style('display', show ? null : 'none');
+            });
+          }
+
+          const zoom = d3.zoom()
+            .scaleExtent([0.5, 8])
+            .translateExtent([[-10000, -10000], [width + 10000, height + 10000]])
+            .on('zoom', (event) => {
+              gMain.attr('transform', event.transform);
+              updateLabelVisibility(event.transform.k);
+            });
+          svg.call(zoom);
+
+          // fit-to-card: ใช้ bounding box จริงของ gMain เพื่อให้ไม่ตัดหาย
+          const paddingLeft = 40, paddingRight = 40, paddingTop = 20, paddingBottom = 20;
+          const bbox = gMain.node().getBBox();
+          const contentW = Math.max(1, bbox.width);
+          const contentH = Math.max(1, bbox.height);
+          const scaleX = (width - paddingLeft - paddingRight) / contentW;
+          const scaleY = (height - paddingTop - paddingBottom) / contentH;
+          const fitScale = Math.min(1, Math.min(scaleX, scaleY));
+          const tx = (-bbox.x * fitScale) + paddingLeft;
+          const ty = (-bbox.y * fitScale) + paddingTop;
+          const initialT = d3.zoomIdentity.translate(tx, ty).scale(fitScale);
+          svg.call(zoom.transform, initialT);
+          updateLabelVisibility(fitScale);
+
+          btnReset.addEventListener('click', () => {
+            svg.transition().duration(300).call(zoom.transform, initialT);
+          });
+        });
+      } catch (err) {
+        contentDisplay.innerHTML = `<p style="color:red">Failed to render DAG: ${err.message}</p>`;
+      }
+    }
+
+    // ===== Runtime renderer (domain 0..12, lane 1.3x, zoom/pan, fixed-size labels) =====
+    async function renderRuntimeView() {
+      const data = await fetchOpTreeData(currentState.run, currentState.worker);
+      if (!data || data.error) { contentDisplay.innerHTML = `<p style="color:red">Failed to load data. ${data ? data.error : ''}</p>`; return; }
+
+      const stepKeys = Object.keys(data).sort((a,b)=> Number(a)-Number(b));
+      if (!stepKeys.length) { contentDisplay.innerHTML = '<p>No runtime data.</p>'; return; }
+
+      contentDisplay.innerHTML = '';
+      const outerContainer = document.createElement('div'); outerContainer.style.width = '100%'; outerContainer.style.overflowX = 'auto';
+      contentDisplay.appendChild(outerContainer);
+
+      const domainMin = 0, domainMax = 12;  // <<< เปลี่ยนเป็น 0..12
+      const domainSpan = domainMax - domainMin;
+
+      stepKeys.forEach(stepKey => {
+        const step = data[stepKey];
+
+        // blocks
+        const compBlocks = [], commBlocks = [];
+        const pushComp = (name,s,e) => { const st=Number(s||0), ed=Number(e||s||0); compBlocks.push({name:name||'', start:st, end:ed, dur:ed-st}); };
+        if (step.forward) (Array.isArray(step.forward)?step.forward:[step.forward]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
+        if (step.loss)    (Array.isArray(step.loss)?step.loss:[step.loss]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
+        if (step.backward) (Array.isArray(step.backward)?step.backward:[step.backward]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
+        if (step.optimizer) (Array.isArray(step.optimizer)?step.optimizer:[step.optimizer]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
+        (step.broadcasts||[]).forEach(ev=>{ const s=Number(ev.start_time||0), e=Number(ev.end_time||ev.start_time||0); commBlocks.push({name:'broadcast',start:s,end:e,dur:e-s}); });
+        (function collectAllReduce(events){ if(!Array.isArray(events))return; events.forEach(ev=>{ (ev.children||[]).forEach(ch=>{ if (ch.name==='nccl:all_reduce'||(ch.name&&ch.name.toLowerCase().includes('all_reduce'))) { commBlocks.push({name:ch.name||'all_reduce',start:Number(ch.start_time||0),end:Number(ch.end_time||ch.start_time||0),dur:Number(ch.dur||(ch.end_time-ch.start_time)||0)}); } }); collectAllReduce(ev.children||[]); }); })(step.backward||[]);
+
+        // layout
+        const margin = {top:20, right:24, bottom:70, left:160};
+        const laneBase = 80;
+        const laneHeight = Math.round(laneBase * 1.3);   // <<< 1.3x ของเดิม
+        const gap = 24;
+
+        const wrapperWidth = Math.max(700, window.innerWidth - 360);
+        const innerWidth = Math.max(600, wrapperWidth - margin.left - margin.right);
+        const width = innerWidth + margin.left + margin.right;
+        const height = margin.top + (laneHeight+gap)*2 - gap + margin.bottom;
+
+        // card
+        const card = document.createElement('div'); card.className = 'card';
+        const header = document.createElement('div'); header.className='card-header';
+        header.innerHTML = `<h4 class="card-title">Step ${stepKey}</h4>`;
+        const controls = document.createElement('div'); controls.className='card-controls';
+        const legend = document.createElement('div'); legend.className = 'legend';
+        legend.innerHTML = `
+          <div class="legend-item"><span class="legend-swatch" style="background:#b9defa;border-color:#7fb8e0"></span>Computation</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#f8c9b3;border-color:#e28a2b"></span>Communication</div>
+        `;
+        controls.appendChild(legend);
+        const btnReset = document.createElement('button'); btnReset.textContent='Reset zoom';
+        controls.appendChild(btnReset);
+        header.appendChild(controls);
+        const body = document.createElement('div'); body.className='card-body';
+        const svgWrap = document.createElement('div'); svgWrap.className='runtime-wrapper'; svgWrap.style.width = width + 'px';
+        body.appendChild(svgWrap);
+        card.appendChild(header); card.appendChild(body);
+        outerContainer.appendChild(card);
+
+        // svg
+        const svg = d3.select(svgWrap).append('svg')
+          .attr('class','runtime-svg')
+          .attr('width', width)
+          .attr('height', height)
+          .attr('viewBox', `0 0 ${width} ${height}`)
+          .style('background','#fff');
+
+        // scales
+        const x = d3.scaleLinear().domain([domainMin, domainMax]).range([margin.left, margin.left + innerWidth]);
+
+        // lane positions (ไม่แสดงข้อความด้านซ้ายแล้ว ใช้ legend ด้านบนแทน)
+        const lanes = ['Computation','Communication'];
+        const laneY = {};
+        lanes.forEach((l,i) => { laneY[l] = margin.top + i*(laneHeight+gap); });
+
+        // axis (fixed pos)
+        const axisG = svg.append('g').attr('class','x-axis').attr('transform', `translate(0, ${margin.top + (laneHeight+gap)*lanes.length + 10})`);
+        axisG.call(d3.axisBottom(x).ticks(domainSpan + 1).tickFormat(d3.format('d')))  // <<< 0..12
+             .selectAll('text').attr('class','tick-text');
+
+        // clip (จำกัดพื้นที่แสดงผลไม่ให้ทับแกนล่างและป้ายด้านซ้าย)
+        const axisYForClip = margin.top + (laneHeight+gap)*lanes.length + 10;
+        const clipId = `clip-${stepKey}`.replace(/[^\w-]/g,'');
+        svg.append('defs')
+          .append('clipPath')
+          .attr('clipPathUnits','userSpaceOnUse')
+          .attr('id', clipId)
+          .append('rect')
+          .attr('x', margin.left)
+          .attr('y', 0)
+          .attr('width', innerWidth)
+          .attr('height', axisYForClip - 28);
+
+        // inner group (transformed)
+        const inner = svg.append('g').attr('class','inner-group').attr('clip-path', `url(#${clipId})`);
+
+        // draw rects
+        const blocks = [];
+        compBlocks.forEach(b => blocks.push(Object.assign({}, b, { lane:'Computation', y: laneY['Computation'] + 10 })));
+        commBlocks.forEach(b => blocks.push(Object.assign({}, b, { lane:'Communication', y: laneY['Communication'] + 10 })));
+
+        inner.selectAll('.block-rect')
+          .data(blocks, d => d.name + '_' + d.start + '_' + d.end)
+          .enter()
+          .append('rect')
+          .attr('class', d => 'block-rect ' + (d.lane === 'Computation' ? 'cm-box' : 'cp-box'))
+          .attr('x', d => Math.max(margin.left, x(d.start)))
+          .attr('y', d => d.y)
+          .attr('width', d => Math.max(2, x(d.end) - x(d.start)))
+          .attr('height', laneHeight - 20)
+          .attr('rx', 6).attr('ry', 6)
+          .on('mouseover', function(event,d){ d3.select(this).style('filter','brightness(1.06)'); tooltip.style('display','block').html(`<strong>${escapeHtml(d.name)}</strong><br>start:${d.start.toFixed(4)} end:${d.end.toFixed(4)} dur:${(d.dur).toFixed(4)}`); })
+          .on('mousemove', function(event){ tooltip.style('left', (event.pageX+12)+'px').style('top', (event.pageY+12)+'px'); })
+          .on('mouseout', function(){ d3.select(this).style('filter',null); tooltip.style('display','none'); });
+
+        // labels overlay
+        const labelsOverlay = svg.append('g').attr('class','labels-overlay');
+        const labelNodes = labelsOverlay.selectAll('.block-label')
+          .data(blocks, d => d.name + '_' + d.start + '_' + d.end)
+          .enter()
+          .append('text')
+          .attr('class','block-label')
+          .style('font-size','10px')
+          .attr('text-anchor','middle')
+          .text(d => truncateName(d.name, 40));
+
+        const minLabelSpacing = 48;
+        const maxZoom = 800;
+
+        const zoom = d3.zoom()
+          .scaleExtent([1, maxZoom])                           // no zoom-out beyond initial
+          .translateExtent([[-10000, -10000], [10000, 10000]]) // allow pan
+          .on('zoom', (event) => {
+            let t = event.transform;
+            const k = t.k;
+
+            // clamp tx so 0..12 ยังฟิตอยู่ (เมื่อ k=1 จะ pan ออกนอกไม่ได้)
+            const maxTx = margin.left - k * x(domainMin);
+            const minTx = (margin.left + innerWidth) - k * x(domainMax);
+            let clampedTx = Math.max(minTx, Math.min(maxTx, t.x));
+
+            // ย่อแกน Y เมื่อซูมเข้า
+            let yScale = 1 / (1 + 0.6 * Math.max(0, k - 1));
+            yScale = Math.max(0.25, Math.min(1, yScale));
+
+            // ป้องกันการชนกับแกนบน/ล่าง: clamp การเลื่อนแกน Y
+            const axisBottomY = axisYForClip;
+            const contentBottomDataY = laneY['Communication'] + (laneHeight - 10);
+            const paddingBottom = 14; // ระยะห่างขั้นต่ำจากแกนล่าง
+            const maxTy = axisBottomY - paddingBottom - yScale * contentBottomDataY; // เลื่อนลงได้มากสุด
+            // ขอบบน (กันไม่ให้ก้อนล้ำขึ้นไปจนชนขอบบน)
+            const contentTopDataY = laneY['Computation'] + 10;
+            const paddingTop = 10;
+            const minTy = paddingTop - yScale * contentTopDataY; // เลื่อนขึ้นได้น้อยสุด
+            let clampedTy = Math.max(minTy, Math.min(t.y, maxTy));
+
+            // apply
+            inner.attr('transform', `translate(${clampedTx}, ${clampedTy}) scale(${k}, ${yScale})`);
+
+            // อัปเดตแกน X ให้ละเอียดขึ้นตาม zoom (ไม่มีเลขซ้ำ ๆ)
+            const newX = d3.zoomIdentity.translate(clampedTx, 0).scale(k).rescaleX(x);
+            const tickCount = Math.max(2, Math.min(60, Math.floor((domainSpan + 1) * k))); // <<< อิง domain ใหม่
+            const tickVals = newX.ticks(tickCount);
+            let decimals = 0;
+            if (tickVals.length > 1) {
+              const step = Math.abs(tickVals[1] - tickVals[0]);
+              decimals = Math.max(0, Math.min(4, Math.ceil(-Math.log10(step))));
+            }
+            const fmt = d3.format(`.${decimals}f`);
+            axisG.call(d3.axisBottom(newX).tickValues(tickVals).tickFormat(d => fmt(d)))
+                 .selectAll('text').attr('class','tick-text');
+            // ให้แกนอยู่ด้านบนเสมอหลังซูม/แพน
+            axisG.raise();
+
+            // วาง label ให้ติดก้อน (ไม่ scale)
+            const labelPositions = [];
+            labelNodes.each(function(d) {
+              const dataCenter = (d.start + d.end)/2;
+              const screenX = clampedTx + k * x(dataCenter);
+              const blockCenterY = d.y + (laneHeight - 20)/2;
+              const screenY = clampedTy + yScale * blockCenterY;
+              const screenStart = clampedTx + k * x(d.start);
+              const screenEnd   = clampedTx + k * x(d.end);
+              const screenW = Math.max(0, screenEnd - screenStart);
+              labelPositions.push({node:this, x:screenX, y:Math.min(screenY, axisBottomY-12), w:screenW});
+            });
+            labelPositions.sort((a,b)=> a.x - b.x);
+            let lastX = -Infinity;
+            labelPositions.forEach(p => {
+              const node = d3.select(p.node);
+              if (p.w < 40 || (p.x - lastX) < minLabelSpacing) node.classed('hidden-label', true);
+              else { node.classed('hidden-label', false).attr('x', p.x).attr('y', p.y); lastX = p.x; }
+            });
+          });
+
+        svg.call(zoom);
+        // วางแกนไว้บนสุดเสมอ เพื่อไม่ให้ rect ไปทับตัวเลขแกน
+        function bringAxisToFront(){ axisG.raise(); }
+        bringAxisToFront();
+
+        // initial placement (identity): ฟิต 0..12 กับการ์ด และแก้บั๊ก label เริ่มต้น
+        (function initialUpdate() {
+          const t = d3.zoomIdentity;
+          inner.attr('transform', `translate(${t.x}, ${t.y}) scale(${t.k}, 1)`);
+          axisG.call(d3.axisBottom(t.rescaleX(x)).ticks(domainSpan + 1).tickFormat(d3.format('d'))) // 0..12
+               .selectAll('text').attr('class','tick-text');
+          axisG.raise();
+          const axisBottomY = axisYForClip;
+          const labelPositions = [];
+          labelNodes.each(function(d) {
+            const dataCenter = (d.start + d.end)/2;
+            const screenX = t.x + t.k * x(dataCenter);
+            const blockCenterY = d.y + (laneHeight - 20)/2;
+            const screenY = t.y + 1 * blockCenterY;
+            const screenStart = t.x + t.k * x(d.start);
+            const screenEnd = t.x + t.k * x(d.end);
+            const screenW = Math.max(0, screenEnd - screenStart);
+            labelPositions.push({node:this, x:screenX, y:Math.min(screenY, axisBottomY-12), w:screenW});
+          });
+          labelPositions.sort((a,b)=> a.x - b.x);
+          let lastX = -Infinity;
+          labelPositions.forEach(p => {
+            const node = d3.select(p.node);
+            if (p.w < 40 || (p.x - lastX) < 48) node.classed('hidden-label', true);
+            else { node.classed('hidden-label', false).attr('x', p.x).attr('y', p.y); lastX = p.x; }
+          });
+        })();
+
+        // reset
+        btnReset.addEventListener('click', () => svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity));
+
+        function truncateName(name, max) { if (!name) return ''; return name.length > max ? name.slice(0, max-1) + '…' : name; }
+        function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+      }); // end steps
+    } // end renderRuntimeView
+
+    // --- Communication table (เดิม) ---
+    async function renderCommunicationTable() {
+      if (!commTimingCache) {
+        try {
+          const response = await fetch('./communication_timing');
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          commTimingCache = await response.json();
+        } catch (error) {
+          contentDisplay.innerHTML = `<p style="color: red;">Failed to fetch communication timing data: ${error.message}</p>`; return;
+        }
+      }
+      contentDisplay.innerHTML = createHtmlTableFromTimingData(commTimingCache);
+    }
+
+    function createHtmlTableFromTimingData(data) {
+      if (!data || Object.keys(data).length === 0) return '<h3>Communication Timing Table</h3><p>No communication timing data available.</p>';
+      const runGroups = {};
+      for (const runName in data) { const keys = Object.keys(data[runName]); const signature = keys.join(','); if (!runGroups[signature]) runGroups[signature] = []; runGroups[signature].push(runName); }
+      let finalHtml = ''; let tableCount = 0;
+      for (const signature in runGroups) {
+        if (!signature) continue;
+        tableCount++;
+        const runsInGroup = runGroups[signature];
+        const firstRunInGroup = runsInGroup[0];
+        const headers = Object.keys(data[firstRunInGroup]);
+        const minValues = {};
+        if (runsInGroup.length > 1) {
+          headers.forEach(header => {
+            const values = runsInGroup.map(r => data[r][header]).filter(v => v !== undefined);
+            if (values.length) minValues[header] = Math.min(...values);
+          });
+        }
+        finalHtml += `<div style="margin-bottom:18px"><h3>Communication Timing Table #${tableCount}</h3>`;
+        let table = '<table class="timing-table">';
+        table += '<thead><tr><th>Communication Algorithm</th>';
+        headers.forEach(h => table += `<th>${h}</th>`);
+        table += '</tr></thead><tbody>';
+        runsInGroup.forEach(runName => {
+          table += `<tr><td>${runName}</td>`;
+          const row = data[runName];
+          headers.forEach(h => {
+            const v = row[h];
+            const highlightClass = (v !== undefined && v === minValues[h]) ? 'highlight-min' : '';
+            table += `<td class="${highlightClass}">${v !== undefined ? v.toFixed(3) : 'N/A'}</td>`;
+          });
+          table += '</tr>';
+        });
+        table += '</tbody></table></div>';
+        finalHtml += table;
+      }
+      return finalHtml;
+    }
+
+    initialize();
+  });
+  </script>
+</body>
+</html>
