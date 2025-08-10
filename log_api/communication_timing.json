@@ -1,0 +1,20 @@
+{
+    "Tree": {
+        "broadcast_0": 0.3134,
+        "broadcast_1": 0.1029,
+        "all_reduce_0": 0.6014,
+        "all_reduce_1": 0.8492,
+        "all_reduce_2": 0.8004,
+        "all_reduce_3": 0.9484,
+        "all_reduce_4": 0.7769
+    },
+    "Ring": {
+        "broadcast_0": 0.2547,
+        "broadcast_1": 0.0734,
+        "all_reduce_0": 0.4794,
+        "all_reduce_1": 0.6544,
+        "all_reduce_2": 0.648,
+        "all_reduce_3": 0.7202,
+        "all_reduce_4": 0.6709
+    }
+}

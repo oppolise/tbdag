@@ -1,0 +1,1184 @@
+{
+    "30": {
+        "nodes": [
+            {
+                "id": "comp_1",  
+                "label": "Conv2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.166864782348895,
+                "end_time": 2.358355438089484,
+                "dur": 0.19149065574058888
+            },
+            {
+                "id": "comp_2",
+                "label": "BatchNorm2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.360109518979325,
+                "end_time": 2.498985515979975,
+                "dur": 0.13887599700065012
+            },
+            {
+                "id": "comp_3",
+                "label": "ReLU_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.500338398390287,
+                "end_time": 2.5056568219758826,
+                "dur": 0.005318423585595422
+            },
+            {
+                "id": "comp_4",
+                "label": "MaxPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.5065235507336756,
+                "end_time": 2.5890743774498053,
+                "dur": 0.08255082671612968
+            },
+            {
+                "id": "comp_5",
+                "label": "Seq0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.5902019891567223,
+                "end_time": 2.905898256590749,
+                "dur": 0.3156962674340269
+            },
+            {
+                "id": "comp_6",
+                "label": "Seq2",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.9065327125446045,
+                "end_time": 3.320836443797684,
+                "dur": 0.4143037312530793
+            },
+            {
+                "id": "comp_7",
+                "label": "Seq4",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 3.3215124200196007,
+                "end_time": 3.9298562280577145,
+                "dur": 0.6083438080381138
+            },
+            {
+                "id": "comp_8",
+                "label": "Seq6",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 3.9304941850618413,
+                "end_time": 4.245904241636188,
+                "dur": 0.3154100565743465
+            },
+            {
+                "id": "comp_9",
+                "label": "AdaptiveAvgPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.246764077701259,
+                "end_time": 4.256856238035708,
+                "dur": 0.010092160334448153
+            },
+            {
+                "id": "comp_10",
+                "label": "Linear_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.2606711793454135,
+                "end_time": 4.342804779336241,
+                "dur": 0.08213359999082748
+            },
+            {
+                "id": "comp_11",
+                "label": "cross_entropy_loss",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.384659452402477,
+                "end_time": 4.562789115637327,
+                "dur": 0.17812966323484947
+            },
+            {
+                "id": "comp_12",
+                "label": "Linear_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.841934090015329,
+                "end_time": 7.206807225520065,
+                "dur": 2.3648731355047365
+            },
+            {
+                "id": "comp_13",
+                "label": "engine::evaluate_function: ViewBackward0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.208327939527759,
+                "end_time": 7.2107338175110804,
+                "dur": 0.0024058779833211474
+            },
+            {
+                "id": "comp_14",
+                "label": "AdaptiveAvgPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.267270309001821,
+                "end_time": 7.276288850389006,
+                "dur": 0.009018541387185053
+            },
+            {
+                "id": "comp_15",
+                "label": "Seq6.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.277721108173438,
+                "end_time": 7.851250636425295,
+                "dur": 0.5735295282518571
+            },
+            {
+                "id": "comm_16",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 7.4583732234248625,
+                "end_time": 7.834627977960539,
+                "dur": 0.37625475453567603
+            },
+            {
+                "id": "comp_17",
+                "label": "Seq4.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.852083941093779,
+                "end_time": 8.62258009593403,
+                "dur": 0.7704961548402505
+            },
+            {
+                "id": "comm_18",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 8.510253164883801,
+                "end_time": 8.540338127496522,
+                "dur": 0.030084962612720645
+            },
+            {
+                "id": "comp_19",
+                "label": "Seq2.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 8.623371989742273,
+                "end_time": 9.12620256700507,
+                "dur": 0.502830577262797
+            },
+            {
+                "id": "comp_20",
+                "label": "Seq0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.126998016567494,
+                "end_time": 9.556303091786248,
+                "dur": 0.4293050752187533
+            },
+            {
+                "id": "comp_21",
+                "label": "MaxPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.557111177951995,
+                "end_time": 9.56457459657179,
+                "dur": 0.007463418619794382
+            },
+            {
+                "id": "comp_22",
+                "label": "ReLU_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.565625075764917,
+                "end_time": 9.568865407198842,
+                "dur": 0.0032403314339255473
+            },
+            {
+                "id": "comp_23",
+                "label": "BatchNorm2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.56963552885071,
+                "end_time": 9.584753063922264,
+                "dur": 0.015117535071553334
+            },
+            {
+                "id": "comp_24",
+                "label": "Conv2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.585470341596599,
+                "end_time": 9.613380003208713,
+                "dur": 0.027909661612113723
+            },
+            {
+                "id": "comm_25",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 9.609523377519213,
+                "end_time": 9.65113549344634,
+                "dur": 0.041612115927126325
+            },
+            {
+                "id": "comp_26",
+                "label": "Optimizer",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.973142021067044,
+                "end_time": 10.0,
+                "dur": 0.026857978932955717
+            },
+            {
+                "id": "comm_27",
+                "label": "nccl:broadcast",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 0.0,
+                "end_time": 0.02432863422365917,
+                "dur": 0.02432863422365917
+            }
+        ],
+        "edges": [
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_27",
+                "target": "comp_1",
+                "kind": "bcast_to_first_forward"
+            },
+            {
+                "source": "comp_1",
+                "target": "comp_2",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_2",
+                "target": "comp_3",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_3",
+                "target": "comp_4",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_4",
+                "target": "comp_5",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_5",
+                "target": "comp_6",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_6",
+                "target": "comp_7",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_7",
+                "target": "comp_8",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_8",
+                "target": "comp_9",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_9",
+                "target": "comp_10",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_10",
+                "target": "comp_11",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_11",
+                "target": "comp_12",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_12",
+                "target": "comp_13",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_13",
+                "target": "comp_14",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_14",
+                "target": "comp_15",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_16",
+                "target": "comp_17",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_18",
+                "target": "comp_19",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_19",
+                "target": "comp_20",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_20",
+                "target": "comp_21",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_21",
+                "target": "comp_22",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_22",
+                "target": "comp_23",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_23",
+                "target": "comp_24",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_25",
+                "target": "comp_26",
+                "kind": "allreduce_to_optimizer"
+            }
+        ]
+    },
+    "31": {
+        "nodes": [
+            {
+                "id": "comp_1",
+                "label": "Conv2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6147179213780574,
+                "end_time": 0.6369755709031811,
+                "dur": 0.022257649525123768
+            },
+            {
+                "id": "comp_2",
+                "label": "BatchNorm2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.638478125864266,
+                "end_time": 0.6721513921640891,
+                "dur": 0.033673266299823146
+            },
+            {
+                "id": "comp_3",
+                "label": "ReLU_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6737361422266026,
+                "end_time": 0.6833199485183098,
+                "dur": 0.009583806291707186
+            },
+            {
+                "id": "comp_4",
+                "label": "MaxPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6845230614986124,
+                "end_time": 0.6955667810730622,
+                "dur": 0.011043719574449828
+            },
+            {
+                "id": "comp_5",
+                "label": "Seq0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6968222756136684,
+                "end_time": 1.3472428033318757,
+                "dur": 0.6504205277182074
+            },
+            {
+                "id": "comp_6",
+                "label": "Seq2",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 1.3482983927341812,
+                "end_time": 2.2122193898434315,
+                "dur": 0.8639209971092503
+            },
+            {
+                "id": "comp_7",
+                "label": "Seq4",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.2132303183235735,
+                "end_time": 3.4748422174756004,
+                "dur": 1.2616118991520269
+            },
+            {
+                "id": "comp_8",
+                "label": "Seq6",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 3.4759178805370694,
+                "end_time": 4.146336999060647,
+                "dur": 0.6704191185235779
+            },
+            {
+                "id": "comp_9",
+                "label": "AdaptiveAvgPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.147340325681697,
+                "end_time": 4.160717815997286,
+                "dur": 0.013377490315588325
+            },
+            {
+                "id": "comp_10",
+                "label": "Linear_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.165160271183019,
+                "end_time": 4.184972022545404,
+                "dur": 0.019811751362384555
+            },
+            {
+                "id": "comp_11",
+                "label": "cross_entropy_loss",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.21091586105569,
+                "end_time": 4.226055438552914,
+                "dur": 0.015139577497223833
+            },
+            {
+                "id": "comp_12",
+                "label": "Linear_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.305491659026402,
+                "end_time": 4.381221616855564,
+                "dur": 0.0757299578291617
+            },
+            {
+                "id": "comp_13",
+                "label": "engine::evaluate_function: ViewBackward0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.38340049971771,
+                "end_time": 4.38671502906072,
+                "dur": 0.0033145293430099088
+            },
+            {
+                "id": "comp_14",
+                "label": "AdaptiveAvgPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.388112702122149,
+                "end_time": 4.39970078607499,
+                "dur": 0.011588083952840833
+            },
+            {
+                "id": "comp_15",
+                "label": "Seq6.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.4020716158792,
+                "end_time": 5.446059630978203,
+                "dur": 1.0439880150990026
+            },
+            {
+                "id": "comm_16",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 4.533316762864234,
+                "end_time": 5.405194530861481,
+                "dur": 0.8718777679972467
+            },
+            {
+                "id": "comp_17",
+                "label": "Seq4.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 5.447789410258699,
+                "end_time": 7.201662664367041,
+                "dur": 1.753873254108342
+            },
+            {
+                "id": "comm_18",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 6.952103132711878,
+                "end_time": 7.022456319361322,
+                "dur": 0.07035318664944423
+            },
+            {
+                "id": "comp_19",
+                "label": "Seq2.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.2034248703277255,
+                "end_time": 8.38249043840539,
+                "dur": 1.1790655680776654
+            },
+            {
+                "id": "comp_20",
+                "label": "Seq0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 8.383947976107166,
+                "end_time": 9.174010854409527,
+                "dur": 0.7900628783023613
+            },
+            {
+                "id": "comp_21",
+                "label": "MaxPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.17574787921197,
+                "end_time": 9.185448920424356,
+                "dur": 0.00970104121238613
+            },
+            {
+                "id": "comp_22",
+                "label": "ReLU_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.187029038103987,
+                "end_time": 9.192676744292893,
+                "dur": 0.005647706188906199
+            },
+            {
+                "id": "comp_23",
+                "label": "BatchNorm2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.194054581253255,
+                "end_time": 9.224698150367908,
+                "dur": 0.0306435691146536
+            },
+            {
+                "id": "comp_24",
+                "label": "Conv2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.22603322687088,
+                "end_time": 9.280084820593512,
+                "dur": 0.05405159372263135
+            },
+            {
+                "id": "comm_25",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 9.272972687518028,
+                "end_time": 9.321644659363782,
+                "dur": 0.04867197184575467
+            },
+            {
+                "id": "comp_26",
+                "label": "Optimizer",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.941579712880632,
+                "end_time": 10.0,
+                "dur": 0.0584202871193682
+            },
+            {
+                "id": "comm_27",
+                "label": "nccl:broadcast",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 0.0,
+                "end_time": 0.047229281525016556,
+                "dur": 0.047229281525016556
+            }
+        ],
+        "edges": [
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_27",
+                "target": "comp_1",
+                "kind": "bcast_to_first_forward"
+            },
+            {
+                "source": "comp_1",
+                "target": "comp_2",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_2",
+                "target": "comp_3",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_3",
+                "target": "comp_4",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_4",
+                "target": "comp_5",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_5",
+                "target": "comp_6",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_6",
+                "target": "comp_7",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_7",
+                "target": "comp_8",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_8",
+                "target": "comp_9",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_9",
+                "target": "comp_10",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_10",
+                "target": "comp_11",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_11",
+                "target": "comp_12",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_12",
+                "target": "comp_13",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_13",
+                "target": "comp_14",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_14",
+                "target": "comp_15",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_16",
+                "target": "comp_17",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_18",
+                "target": "comp_19",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_19",
+                "target": "comp_20",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_20",
+                "target": "comp_21",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_21",
+                "target": "comp_22",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_22",
+                "target": "comp_23",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_23",
+                "target": "comp_24",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_25",
+                "target": "comp_26",
+                "kind": "allreduce_to_optimizer"
+            }
+        ]
+    },
+    "32": {
+        "nodes": [
+            {
+                "id": "comp_1",
+                "label": "Conv2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6099881849985775,
+                "end_time": 0.6305224034147364,
+                "dur": 0.020534218416158878
+            },
+            {
+                "id": "comp_2",
+                "label": "BatchNorm2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6319304135874005,
+                "end_time": 0.66563424995447,
+                "dur": 0.03370383636706942
+            },
+            {
+                "id": "comp_3",
+                "label": "ReLU_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6672792162343479,
+                "end_time": 0.676818996988645,
+                "dur": 0.009539780754297067
+            },
+            {
+                "id": "comp_4",
+                "label": "MaxPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6778016028981372,
+                "end_time": 0.6884977806390877,
+                "dur": 0.010696177740950552
+            },
+            {
+                "id": "comp_5",
+                "label": "Seq0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 0.6896245144900811,
+                "end_time": 1.3332337117279245,
+                "dur": 0.6436091972378434
+            },
+            {
+                "id": "comp_6",
+                "label": "Seq2",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 1.334277621451114,
+                "end_time": 2.1606489586820206,
+                "dur": 0.8263713372309065
+            },
+            {
+                "id": "comp_7",
+                "label": "Seq4",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 2.161553277178575,
+                "end_time": 3.4161633937642364,
+                "dur": 1.2546101165856616
+            },
+            {
+                "id": "comp_8",
+                "label": "Seq6",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 3.41713599563582,
+                "end_time": 4.048304357451812,
+                "dur": 0.631168361815992
+            },
+            {
+                "id": "comp_9",
+                "label": "AdaptiveAvgPool2d_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.049223333027164,
+                "end_time": 4.06157180558739,
+                "dur": 0.012348472560226753
+            },
+            {
+                "id": "comp_10",
+                "label": "Linear_0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.065805025861136,
+                "end_time": 4.084122186620255,
+                "dur": 0.01831716075911949
+            },
+            {
+                "id": "comp_11",
+                "label": "cross_entropy_loss",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.107684953024295,
+                "end_time": 4.124323063979033,
+                "dur": 0.016638110954738217
+            },
+            {
+                "id": "comp_12",
+                "label": "Linear_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.193143516252746,
+                "end_time": 4.265486320478563,
+                "dur": 0.07234280422581651
+            },
+            {
+                "id": "comp_13",
+                "label": "engine::evaluate_function: ViewBackward0",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.267299726838582,
+                "end_time": 4.26985145446148,
+                "dur": 0.0025517276228983476
+            },
+            {
+                "id": "comp_14",
+                "label": "AdaptiveAvgPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.270905135570534,
+                "end_time": 4.2797996558797085,
+                "dur": 0.008894520309174148
+            },
+            {
+                "id": "comp_15",
+                "label": "Seq6.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 4.281650053914785,
+                "end_time": 5.2910838849280655,
+                "dur": 1.0094338310132809
+            },
+            {
+                "id": "comm_16",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 4.390779217769851,
+                "end_time": 5.246415274034794,
+                "dur": 0.8556360562649425
+            },
+            {
+                "id": "comp_17",
+                "label": "Seq4.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 5.29281446716028,
+                "end_time": 7.011451994437569,
+                "dur": 1.7186375272772887
+            },
+            {
+                "id": "comm_18",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 6.766342014697839,
+                "end_time": 6.841908910954849,
+                "dur": 0.07556689625701019
+            },
+            {
+                "id": "comp_19",
+                "label": "Seq2.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 7.013155472706612,
+                "end_time": 8.176812250079358,
+                "dur": 1.1636567773727462
+            },
+            {
+                "id": "comp_20",
+                "label": "Seq0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 8.178511075307512,
+                "end_time": 9.08005054319134,
+                "dur": 0.9015394678838291
+            },
+            {
+                "id": "comp_21",
+                "label": "MaxPool2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.081732268494232,
+                "end_time": 9.092533372307203,
+                "dur": 0.010801103812971391
+            },
+            {
+                "id": "comp_22",
+                "label": "ReLU_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.094302923756853,
+                "end_time": 9.100897794933228,
+                "dur": 0.00659487117637525
+            },
+            {
+                "id": "comp_23",
+                "label": "BatchNorm2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.117990391656688,
+                "end_time": 9.155966766493005,
+                "dur": 0.037976374836317106
+            },
+            {
+                "id": "comp_24",
+                "label": "Conv2d_0.backward",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.157521347453637,
+                "end_time": 9.220201995949807,
+                "dur": 0.06268064849617083
+            },
+            {
+                "id": "comm_25",
+                "label": "nccl:all_reduce",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 9.21188992003377,
+                "end_time": 9.24961119190341,
+                "dur": 0.037721271869640915
+            },
+            {
+                "id": "comp_26",
+                "label": "Optimizer",
+                "category": "computation",
+                "lane": "top",
+                "start_time": 9.942770272577928,
+                "end_time": 10.0,
+                "dur": 0.05722972742207233
+            },
+            {
+                "id": "comm_27",
+                "label": "nccl:broadcast",
+                "category": "communication",
+                "lane": "bottom",
+                "start_time": 0.0,
+                "end_time": 0.051804165420814965,
+                "dur": 0.051804165420814965
+            }
+        ],
+        "edges": [
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_27",
+                "target": "comp_1",
+                "kind": "bcast_to_first_forward"
+            },
+            {
+                "source": "comp_1",
+                "target": "comp_2",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_2",
+                "target": "comp_3",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_3",
+                "target": "comp_4",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_4",
+                "target": "comp_5",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_5",
+                "target": "comp_6",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_6",
+                "target": "comp_7",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_7",
+                "target": "comp_8",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_8",
+                "target": "comp_9",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_9",
+                "target": "comp_10",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_10",
+                "target": "comp_11",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_11",
+                "target": "comp_12",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_12",
+                "target": "comp_13",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_13",
+                "target": "comp_14",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_14",
+                "target": "comp_15",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_15",
+                "target": "comm_16",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_16",
+                "target": "comp_17",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_17",
+                "target": "comm_18",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_18",
+                "target": "comp_19",
+                "kind": "allreduce_to_next_backward"
+            },
+            {
+                "source": "comp_19",
+                "target": "comp_20",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_20",
+                "target": "comp_21",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_21",
+                "target": "comp_22",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_22",
+                "target": "comp_23",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_23",
+                "target": "comp_24",
+                "kind": "seq"
+            },
+            {
+                "source": "comp_24",
+                "target": "comm_25",
+                "kind": "backward_to_allreduce"
+            },
+            {
+                "source": "comm_25",
+                "target": "comp_26",
+                "kind": "allreduce_to_optimizer"
+            }
+        ]
+    }
+}
