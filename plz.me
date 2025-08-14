@@ -1,0 +1,198 @@
+# ที่มาและขั้นตอนการสร้างตัวแปร `tid2list`
+
+เอกสารนี้จะอธิบายขั้นตอนการทำงานของโค้ดตั้งแต่การรับไฟล์ JSON trace จนกระทั่งได้มาซึ่งตัวแปร `tid2list` ซึ่งทำหน้าที่จัดกลุ่มข้อมูล Operations ตาม Thread ID (TID) เพื่อนำไปสร้าง Operator Tree ต่อไป
+
+## ภาพรวม Flow การทำงาน
+
+```
+1. โหลดไฟล์ JSON Trace
+       |
+       V
+2. เรียก EventParser.parse()
+       |
+       V
+3. เรียก EventParser.parse_nodes()
+       |
+       V
+4. สร้างตัวแปร tid2list (defaultdict)
+       |
+       V
+5. วนลูปอ่านทุก Event ในไฟล์ JSON
+       |
+       V
+6. เรียก EventParser._parse_node() สำหรับแต่ละ Event
+       |
+       V
+7. สร้าง OperatorNode จาก Event
+       |
+       V
+8. **จัดกลุ่ม Node ที่สร้างลงใน tid2list ตาม Thread ID (tid)**
+       |
+       V
+9. ส่งต่อ tid2list ที่สมบูรณ์ไปสร้าง Operator Tree
+```
+
+---
+
+## ขั้นตอนที่ 1: เริ่มต้นที่การโหลดข้อมูล (นอก `profiler`)
+
+ทุกอย่างเริ่มต้นเมื่อระบบ (ในที่นี้คือ `RunLoader` จากไฟล์ `cgs_dnn_analysis/profiler/loader.py`) อ่านไฟล์ `*.pt.trace.json` ที่ได้จาก PyTorch Profiler
+
+ไฟล์ JSON นี้จะมีโครงสร้างเป็น list ของ object โดยแต่ละ object คือ "event" ที่เกิดขึ้นระหว่างการรันโปรแกรม
+
+**ตัวอย่างข้อมูลในไฟล์ JSON:**
+```json
+[
+  { "ph": "X", "cat": "Operator", "name": "aten::conv2d", "pid": 123, "tid": 456, "ts": 164000, "dur": 150, ... },
+  { "ph": "X", "cat": "Operator", "name": "aten::relu", "pid": 123, "tid": 456, "ts": 164200, "dur": 20, ... },
+  { "ph": "X", "cat": "Runtime", "name": "cudaLaunchKernel", "pid": 123, "tid": 456, "ts": 163990, "dur": 5, ... },
+  { "ph": "X", "cat": "Operator", "name": "aten::add", "pid": 123, "tid": 789, "ts": 165000, "dur": 10, ... }
+]
+```
+ข้อมูล `events` ที่เป็น list ของ dictionaries นี้ จะถูกส่งต่อไปยัง `EventParser`
+
+---
+
+## ขั้นตอนที่ 2: `EventParser.parse()` - จุดเริ่มต้นของการประมวลผล
+
+ข้อมูล `events` จากไฟล์ JSON จะถูกส่งมาที่เมธอด `parse` ของคลาส `EventParser` ในไฟล์ `cgs_dnn_analysis/profiler/event_parser.py`
+
+เมธอดนี้ทำหน้าที่เป็นตัวควบคุมหลัก โดยจะเรียก `self.parse_nodes(events)` เพื่อเริ่มต้นการประมวลผล event ทั้งหมด
+
+**Code:**
+```python
+# cgs_dnn_analysis/profiler/event_parser.py
+
+class EventParser(NodeParserMixin):
+    def __init__(self):
+        super().__init__()
+
+    def parse(self, events: Iterable[BaseEvent], fwd_bwd_map: Dict[int, int]) -> Dict[int, List[OperatorNode]]:
+        # จุดเริ่มต้น: เรียก parse_nodes เพื่อประมวลผล events ทั้งหมด
+        with utils.timing('EventParser: parse nodes'):
+            tid2list, tid2zero_rt_list, staled_device_nodes, pl_tid2list = self.parse_nodes(events)
+
+        # ... หลังจากได้ tid2list แล้ว จะนำไปสร้าง Tree ต่อไป
+        with utils.timing('EventParser: build operator tree'):
+            builder = OpTreeBuilder()
+            tid2tree = builder.build_tree(tid2list, ...)
+            # ...
+        return tid2tree, pl_tid2tree
+```
+
+---
+
+## ขั้นตอนที่ 3: `NodeParserMixin.parse_nodes()` - การเตรียมการและวนลูป
+
+เมธอด `parse_nodes` (อยู่ใน Mixin ที่ `EventParser` สืบทอดมา) เป็นหัวใจของการทำงานในขั้นตอนนี้
+
+1.  **การสร้างตัวแปร `tid2list`**: ที่บรรทัดแรกของเมธอดนี้ `tid2list` จะถูกสร้างขึ้นเป็น `defaultdict(list)`
+    *   `defaultdict(list)` คือ Dictionary ชนิดพิเศษที่เมื่อเราพยายามเข้าถึง key ที่ยังไม่มีอยู่ มันจะสร้าง key นั้นขึ้นมาใหม่โดยอัตโนมัติพร้อมกับค่าเริ่มต้นเป็น list ว่าง `[]` ซึ่งสะดวกมากสำหรับการจัดกลุ่มข้อมูล
+2.  **การวนลูป**: จากนั้นโค้ดจะวนลูป `for event in events:` เพื่ออ่าน event ทีละตัวจาก list ที่รับเข้ามา
+
+**Code:**
+```python
+# cgs_dnn_analysis/profiler/event_parser.py -> class NodeParserMixin
+
+    def parse_nodes(self, events: Iterable[BaseEvent]):
+        # ===> จุดกำเนิดของ tid2list <===
+        # สร้าง tid2list เป็น defaultdict ซึ่งจะสร้าง list ว่างสำหรับ tid ใหม่โดยอัตโนมัติ
+        tid2list: Dict[int, List[OperatorNode]] = defaultdict(list)
+
+        # สร้างตัวแปรอื่นๆ สำหรับเก็บข้อมูลประเภทต่างๆ
+        pl_tid2list: Dict[int, List[PLProfileNode]] = defaultdict(list)
+        tid2zero_rt_list: Dict[int, List[RuntimeNode]] = defaultdict(list)
+        # ...
+
+        # วนลูปอ่านทุก event ที่มาจากไฟล์ JSON
+        for event in events:
+            if event.type == EventTypes.MEMORY:
+                continue
+
+            # เรียก _parse_node เพื่อจัดการกับ event แต่ละตัว
+            self._parse_node(
+                event,
+                corrid_to_device,
+                corrid_to_runtime,
+                externalid_to_runtime,
+                tid2list,  # <--- ส่ง tid2list เข้าไปในฟังก์ชัน
+                pl_tid2list,
+                tid2zero_rt_list)
+
+        # ...
+
+        # คืนค่า tid2list ที่มีข้อมูลครบถ้วนแล้วกลับไป
+        return tid2list, tid2zero_rt_list, staled_device_nodes, pl_tid2list
+```
+
+---
+
+## ขั้นตอนที่ 4: `NodeParserMixin._parse_node()` - หัวใจของการจัดกลุ่ม
+
+เมธอด `_parse_node` จะรับ event แต่ละตัวมาพิจารณา และเป็นขั้นตอนที่ `tid2list` ถูกเติมข้อมูลเข้าไปจริงๆ
+
+1.  **ตรวจสอบประเภทของ Event**: โค้ดจะตรวจสอบ `event.type` เพื่อดูว่าเป็น event ที่เราสนใจหรือไม่ เช่น `OPERATOR`, `MODULE`, `PROFILER_STEP`
+2.  **สร้าง `OperatorNode`**: ถ้าเป็น event ที่ใช่ โค้ดจะสร้าง object `op_node` ซึ่งเป็นอินสแตนซ์ของคลาส `OperatorNode` (หรือคลาสลูกของมัน) โดยดึงข้อมูลที่จำเป็นจาก event นั้นๆ เช่น ชื่อ, เวลาเริ่มต้น, ระยะเวลา
+3.  **จัดกลุ่มลง `tid2list`**: นี่คือขั้นตอนที่สำคัญที่สุด โค้ดจะใช้ Thread ID (`event.tid`) ของ event นั้นๆ เป็น key เพื่อเข้าถึง `tid2list` และทำการ `.append(op_node)` เพื่อเพิ่ม `op_node` ที่สร้างขึ้นเข้าไปใน list ของ Thread ID นั้น
+
+**Code:**
+```python
+# cgs_dnn_analysis/profiler/event_parser.py -> class NodeParserMixin
+
+    def _parse_node(self,
+                    event: DurationEvent,
+                    # ... ตัวแปรอื่นๆ
+                    tid2list: Dict[int, List[OperatorNode]],
+                    # ...
+                    ):
+        corrid = event.correlation_id
+        tid = event.tid # ดึง Thread ID จาก event
+
+        if event.type in [EventTypes.KERNEL, EventTypes.MEMCPY, EventTypes.MEMSET]:
+            # ... จัดการกับ Device Events
+        elif event.type == EventTypes.RUNTIME:
+            # ... จัดการกับ Runtime Events
+
+        # ===> ส่วนที่เกี่ยวข้องกับ tid2list <===
+        elif event.type in [EventTypes.PYTHON,
+                            EventTypes.OPERATOR,
+                            EventTypes.PL_MODULE,
+                            EventTypes.PROFILER_STEP,
+                            EventTypes.MODULE,
+                            EventTypes.USER_ANNOTATION]:
+
+            # สร้าง Node จาก event
+            if event.type == EventTypes.PROFILER_STEP:
+                op_node = ProfilerStepNode.create(event)
+            # ... (สร้าง node ประเภทอื่นๆ) ...
+            else:
+                op_node = create_operator_node(event)
+
+            if op_node:
+                # ===> เพิ่ม Node เข้าไปใน tid2list โดยใช้ tid เป็น key <===
+                tid2list[int(tid)].append(op_node)
+
+        # ...
+```
+
+## สรุป
+
+เมื่อการวนลูปใน `parse_nodes` สิ้นสุดลง `tid2list` จะกลายเป็น Dictionary ที่สมบูรณ์ โดยมีลักษณะดังนี้:
+*   **Keys**: คือ Thread ID (TID) ทั้งหมดที่พบในไฟล์ trace
+*   **Values**: คือ List ของ `OperatorNode` ทั้งหมดที่ทำงานอยู่บน Thread ID นั้นๆ
+
+**ตัวอย่างผลลัพธ์ของ `tid2list` (จากข้อมูล JSON ตัวอย่าง):**
+```python
+tid2list = {
+    456: [
+        OperatorNode(name="aten::conv2d", ...),
+        OperatorNode(name="aten::relu", ...)
+        # RuntimeNode(name="cudaLaunchKernel") จะไม่ถูกเก็บในนี้โดยตรง
+    ],
+    789: [
+        OperatorNode(name="aten::add", ...)
+    ]
+}
+```
+
+จากนั้น `tid2list` ที่มีข้อมูลการทำงานของแต่ละเธรดแยกกันอย่างชัดเจนนี้ จะถูกส่งต่อไปยัง `OpTreeBuilder` เพื่อนำไปสร้างเป็นโครงสร้างแบบ Tree ที่แสดงความสัมพันธ์แบบแม่-ลูกของ Operations ทั้งหมดในโปรแกรมต่อไป ซึ่งเป็นขั้นตอนสุดท้ายของการประมวลผลข้อมูลโปรไฟล์ครับ
