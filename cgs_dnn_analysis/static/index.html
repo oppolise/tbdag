@@ -173,74 +173,99 @@
       contentDisplay.innerHTML = `<pre style="white-space:pre-wrap;font-family:monospace;background:#f8f9fa;padding:12px;border-radius:6px">${JSON.stringify(data, null, 2)}</pre>`;
     }
 
-    // ===== DAG renderer (ไม่อิงแกนเวลา; แบ่งบน/ล่าง; ขนาดตาม dur) =====
+    // ===== ส่วนแสดงผล DAG (กราฟแสดงความสัมพันธ์ของงาน) =====
+    // คอมเมนต์นี้บอกว่านี่คือส่วนที่วาดกราฟ DAG
+    // - ไม่อิงตามแกนเวลา (Timeless)
+    // - แบ่งเป็น 2 เลน บน-ล่าง (Computation/Communication)
+    // - ขนาดของโหนด (Node) ขึ้นอยู่กับระยะเวลา (duration) ที่ใช้
     async function renderDagView() {
       try {
+        // 1. ดึงข้อมูล (Fetch Data)
+        // ดึงข้อมูลสำหรับมุมมอง DAG จากเซิร์ฟเวอร์
+        // โดยใช้ 'run' และ 'worker' ที่เลือกอยู่เป็นพารามิเตอร์
         const res = await fetch(`./dag?run=${encodeURIComponent(currentState.run)}&worker=${encodeURIComponent(currentState.worker)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const stepKeys = Object.keys(data).sort((a,b)=> Number(a)-Number(b));
-        contentDisplay.innerHTML = '';
+        if (!res.ok) throw new Error(`HTTP ${res.status}`); // หากดึงข้อมูลไม่สำเร็จ ให้โยน Error
+        const data = await res.json(); // แปลงข้อมูลที่ได้รับเป็น JSON
 
+        // 2. เตรียมการแสดงผล (Prepare for Rendering)
+        // ดึง key ของแต่ละ step จากข้อมูล (เช่น "1", "2") แล้วเรียงลำดับตามตัวเลข
+        const stepKeys = Object.keys(data).sort((a,b)=> Number(a)-Number(b));
+        contentDisplay.innerHTML = ''; // ล้างเนื้อหาเก่าในพื้นที่แสดงผลออกไปก่อน
+
+        // 3. วนลูปเพื่อวาดกราฟของแต่ละ Step
+        // วนซ้ำตามจำนวน step ที่ได้จากข้อมูล เพื่อวาดกราฟแยกกันสำหรับแต่ละ step
         stepKeys.forEach(stepKey => {
           const step = data[stepKey];
-          const nodes = step.nodes || []; const edges = step.edges || [];
+          const nodes = step.nodes || []; // โหนดต่างๆ (ตัวแทนของ operation)
+          const edges = step.edges || []; // เส้นเชื่อม (ลูกศรแสดงความสัมพันธ์)
 
+          // 4. ตั้งค่า Layout และ SVG Canvas
+          // กำหนด margin และขนาดของพื้นที่วาดกราฟ
           const margin = {top:20,right:24,bottom:20,left:24};
-          const width = Math.max(1100, window.innerWidth - 260);
-          const height = 360;
-          const laneY = { top: 110, bottom: 270 };
+          const width = Math.max(1100, window.innerWidth - 260); // กำหนดความกว้างแบบ responsive
+          const height = 360; // กำหนดความสูงคงที่
+          const laneY = { top: 110, bottom: 270 }; // กำหนดตำแหน่งแกน Y สำหรับเลนบนและเลนล่าง
 
-          // card
+          // สร้างโครงสร้างของการ์ด (card) ที่จะใช้บรรจุกราฟและส่วนควบคุม
           const card = document.createElement('div'); card.className = 'card';
           const header = document.createElement('div'); header.className='card-header';
           const controls = document.createElement('div'); controls.className='card-controls';
+
+          // สร้างคำอธิบายสัญลักษณ์ (legend) เพื่อบอกความหมายของสี
           const legend = document.createElement('div'); legend.className='legend';
           legend.innerHTML = `
             <div class="legend-item"><span class="legend-swatch" style="background:#b9defa;border-color:#7fb8e0"></span>Computation</div>
             <div class="legend-item"><span class="legend-swatch" style="background:#f8c9b3;border-color:#e28a2b"></span>Communication</div>
           `;
           controls.appendChild(legend);
+
+          // สร้างปุ่มสำหรับรีเซ็ตการซูม (Reset Zoom)
           const btnReset = document.createElement('button'); btnReset.textContent = 'Reset zoom'; controls.appendChild(btnReset);
+
+          // ประกอบร่างการ์ด: ใส่หัวข้อ, ส่วนควบคุม, และพื้นที่สำหรับวาด SVG
           header.innerHTML = `<h4 class="card-title">Step ${stepKey}</h4>`;
           header.appendChild(controls);
           const body = document.createElement('div'); body.className='card-body';
           const svg = d3.select(body).append('svg').attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
           card.appendChild(header); card.appendChild(body);
-          contentDisplay.appendChild(card);
+          contentDisplay.appendChild(card); // เพิ่มการ์ดที่สร้างเสร็จแล้วลงในหน้าเว็บ
 
-          // capture area for zoom
+          // สร้างพื้นที่โปร่งใสสำหรับดักจับ event การซูม
           svg.append('rect').attr('x',0).attr('y',0).attr('width',width).attr('height',height).style('fill','transparent');
+          // สร้าง group <g> สำหรับรวมองค์ประกอบทั้งหมดของกราฟ การซูมจะกระทำกับ group นี้
           const gMain = svg.append('g').attr('class','dag-inner');
 
-          // scale ขนาดโหนดจาก dur
+          // 5. การคำนวณขนาดและการจัดวางโหนด (Node Sizing and Layout)
+          // สร้าง d3 scale เพื่อแปลงค่า duration ของโหนดให้เป็นความกว้าง (pixel)
+          // โหนดที่ใช้เวลานานกว่าจะมีความกว้างมากกว่า
           const maxDur = d3.max(nodes.map(n => n.dur || 0)) || 1;
           const durScale = d3.scaleLinear().domain([0, maxDur]).range([70, 260]);
           const nodeHeight = 34, radius = 8;
-          const nodeWidth = n => durScale(n.dur || 0);
-          const nodesById = new Map(nodes.map(n => [n.id, n]));
+          const nodeWidth = n => durScale(n.dur || 0); // ฟังก์ชันสำหรับหาความกว้างของโหนด
+          const nodesById = new Map(nodes.map(n => [n.id, n])); // สร้าง Map เพื่อให้ค้นหาโหนดด้วย id ได้เร็วขึ้น
 
-          // จัดลำดับ lane บน (computation) ตามลำดับที่ส่งมาจาก API (forward..loss..backward..optimizer)
+          // แบ่งโหนดออกเป็นเลนบน (computation) และเลนล่าง (communication)
           const topNodes = nodes.filter(n => n.lane === 'top');
           const bottomNodes = nodes.filter(n => n.lane === 'bottom');
-          const gap = 46; // เว้นระยะให้ลูกศรเห็นชัด
+          const gap = 46; // กำหนดช่องว่างแนวนอนระหว่างโหนด
 
+          // ฟังก์ชันสำหรับจัดวางโหนดในแนวนอนจากซ้ายไปขวา
           function layoutLinearX(list, startX) {
             const positions = new Map();
             let x = startX;
             list.forEach(n => {
               const w = nodeWidth(n);
-              const cx = x + w/2;
+              const cx = x + w/2; // หาจุดศูนย์กลางของโหนด
               positions.set(n.id, cx);
-              x += w + gap;
+              x += w + gap; // เลื่อนตำแหน่ง x สำหรับโหนดถัดไป
             });
             return positions;
           }
           const topPositions = layoutLinearX(topNodes, margin.left + 70);
 
-          // จัดตำแหน่ง lane ล่าง (communication) จากลำดับ anchor บน
-          // - broadcast: ยึดกับ forward แรก (edge kind=bcast_to_first_forward)
-          // - all_reduce: ยึดกับ backward ของตัวเอง (edge kind=backward_to_allreduce)
+          // จัดตำแหน่งโหนดเลนล่างโดย "ยึด" กับโหนดในเลนบน
+          // เพื่อแสดงความสัมพันธ์ เช่น AllReduce จะเชื่อมโยงกับ Backward Op
+          // ส่วนนี้จะคำนวณตำแหน่ง X ที่ต้องการสำหรับแต่ละโหนดล่าง, จัดเรียง, และปรับตำแหน่งเพื่อไม่ให้ทับกัน
           const commAnchors = [];
           edges.forEach(e => {
             if (e.kind === 'bcast_to_first_forward') {
@@ -249,62 +274,68 @@
               commAnchors.push({comm: e.target, anchor: e.source, type: 'allreduce'});
             }
           });
-          // map id -> desired anchor X (จาก lane บน)
+          // สร้าง Map ของ id โหนด ไปยังตำแหน่ง X ที่ต้องการ (จากเลนบน)
           const desired = new Map();
           commAnchors.forEach(({comm, anchor, type}) => {
             const ax = topPositions.get(anchor) || (margin.left + 70);
             let targetX = ax;
             if (type === 'broadcast') {
-              // วางไว้ซ้ายกว่า forward แรกเล็กน้อย
+              // วางโหนด broadcast ไว้ทางซ้ายของ forward node แรกเล็กน้อย
               const n = nodesById.get(comm); const w = nodeWidth(n);
               targetX = (ax - (nodeWidth(nodesById.get(anchor)) / 2)) - 30 - w/2;
             }
             desired.set(comm, targetX);
           });
-          // สร้างลิสต์ bottom ตาม anchorX แล้วไล่เลื่อนแก้ชน
+          // สร้าง list ของโหนดล่างตามตำแหน่ง anchorX แล้วจัดเรียงและเลื่อนเพื่อแก้ปัญหาการทับซ้อน
           const bottomOrder = bottomNodes.map(n => ({n, ax: desired.get(n.id) ?? (margin.left + 70)}))
                                          .sort((a,b)=> a.ax - b.ax);
           const bottomPositions = new Map();
           let lastRight = margin.left + 40;
           bottomOrder.forEach(({n, ax}) => {
             const w = nodeWidth(n);
-            let cx = Math.max(ax, lastRight + gap + w/2);
+            let cx = Math.max(ax, lastRight + gap + w/2); // คำนวณตำแหน่ง cx ไม่ให้ทับกับโหนดก่อนหน้า
             bottomPositions.set(n.id, cx);
             lastRight = cx + w/2;
           });
 
+          // เก็บพิกัด (x, y) สุดท้ายของทุกโหนดไว้ใน Map
           const nodeIdxMap = new Map();
-          let ti=0, bi=0;
           nodes.forEach(n => {
             if (n.lane==='top') { nodeIdxMap.set(n.id, {x: topPositions.get(n.id), y: laneY.top}); }
             else { nodeIdxMap.set(n.id, {x: bottomPositions.get(n.id), y: laneY.bottom}); }
           });
 
-          // edges (ลูกศร)
+          // 6. วาดเส้นเชื่อม (Edges / Arrows)
+          // กำหนด "หัวลูกศร" (marker) ใน <defs> เพื่อให้สามารถนำกลับมาใช้ใหม่ได้กับทุกเส้น
           const defs = svg.append('defs');
           defs.append('marker').attr('id','arrow').attr('viewBox','0 0 10 10').attr('refX',8).attr('refY',5).attr('markerWidth',7).attr('markerHeight',7).attr('orient','auto')
             .append('path').attr('d','M 0 0 L 10 5 L 0 10 z').attr('fill','#999');
 
+          // วาดเส้นโค้ง (cubic Bézier path) สำหรับแต่ละเส้นเชื่อม ระหว่างโหนดต้นทางและปลายทาง
           edges.forEach(e => {
-            const s = nodeIdxMap.get(e.source); const t = nodeIdxMap.get(e.target);
-            if (!s || !t) return;
+            const s = nodeIdxMap.get(e.source); // ตำแหน่งต้นทาง
+            const t = nodeIdxMap.get(e.target); // ตำแหน่งปลายทาง
+            if (!s || !t) return; // ถ้าไม่มีตำแหน่ง ให้ข้ามไป
             gMain.append('path')
               .attr('d', `M${s.x},${s.y} C ${s.x},${(s.y+t.y)/2} ${t.x},${(s.y+t.y)/2} ${t.x},${t.y}`)
               .attr('fill','none').attr('stroke','#b4b4b4').attr('stroke-width',1.6)
-              .attr('marker-end','url(#arrow)');
+              .attr('marker-end','url(#arrow)'); // เพิ่มหัวลูกศรที่ท้ายเส้น
           });
 
-          // nodes
+          // 7. วาดโหนดและป้ายกำกับ (Nodes and Labels)
+          // วนลูปเพื่อวาดโหนดทั้งหมดเป็นรูปสี่เหลี่ยม
           const g = gMain.append('g');
-          const nodeText = [];
+          const nodeText = []; // เตรียม array สำหรับเก็บข้อมูลป้ายกำกับ
           nodes.forEach(n => {
             const pos = nodeIdxMap.get(n.id); if (!pos) return;
             const w = nodeWidth(n);
             const x = pos.x - w/2; const y = pos.y - nodeHeight/2;
+            // กำหนด class ตามประเภทของโหนด (computation หรือ communication)
             const cls = n.category === 'computation' ? 'cm-box' : 'cp-box';
             g.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',nodeHeight).attr('rx',radius).attr('ry',radius).attr('class',cls);
             nodeText.push({id:n.id, x:pos.x, y:pos.y, data:n});
           });
+          // วาดป้ายกำกับข้อความบนโหนด
           const texts = g.selectAll('text')
             .data(nodeText, d=>d.id)
             .enter()
@@ -315,65 +346,84 @@
             .attr('class','block-label')
             .text(d => d.data.label || d.id);
 
-          // zoom/pan (เหมือน runtime แบบง่าย)
+          // 8. การซูมและแพน (Zoom and Pan)
+          // ฟังก์ชันนี้จะซ่อนป้ายกำกับของโหนดที่เล็กเกินไปจนอ่านไม่ออก ณ ระดับการซูมปัจจุบัน
           function updateLabelVisibility(k){
             texts.each(function(d){
-              const show = nodeWidth(d.data) * k >= 48;
+              const show = nodeWidth(d.data) * k >= 48; // แสดงเมื่อความกว้างบนจอ > 48px
               d3.select(this).style('display', show ? null : 'none');
             });
           }
 
+          // ตั้งค่าและเปิดใช้งาน d3.zoom บน SVG
           const zoom = d3.zoom()
-            .scaleExtent([0.5, 8])
-            .translateExtent([[-10000, -10000], [width + 10000, height + 10000]])
+            .scaleExtent([0.5, 8]) // กำหนดช่วงการซูม
+            .translateExtent([[-10000, -10000], [width + 10000, height + 10000]]) // กำหนดขอบเขตการแพน
             .on('zoom', (event) => {
-              gMain.attr('transform', event.transform);
-              updateLabelVisibility(event.transform.k);
+              gMain.attr('transform', event.transform); // ใช้ transform จากการซูม/แพน
+              updateLabelVisibility(event.transform.k); // อัปเดตการแสดงผลของป้ายกำกับ
             });
           svg.call(zoom);
 
-          // fit-to-card: ใช้ bounding box จริงของ gMain เพื่อให้ไม่ตัดหาย
+          // 9. ปรับขนาดให้พอดีกับการ์ด (Fit to Card)
+          // คำนวณ scale และตำแหน่งเริ่มต้นเพื่อให้กราฟทั้งหมดแสดงพอดีภายในกรอบของการ์ด
           const paddingLeft = 40, paddingRight = 40, paddingTop = 20, paddingBottom = 20;
-          const bbox = gMain.node().getBBox();
+          const bbox = gMain.node().getBBox(); // หาขนาดจริงของเนื้อหากราฟ
           const contentW = Math.max(1, bbox.width);
           const contentH = Math.max(1, bbox.height);
           const scaleX = (width - paddingLeft - paddingRight) / contentW;
           const scaleY = (height - paddingTop - paddingBottom) / contentH;
-          const fitScale = Math.min(1, Math.min(scaleX, scaleY));
+          const fitScale = Math.min(1, Math.min(scaleX, scaleY)); // เลือก scale ที่เล็กที่สุดเพื่อให้พอดี
           const tx = (-bbox.x * fitScale) + paddingLeft;
           const ty = (-bbox.y * fitScale) + paddingTop;
-          const initialT = d3.zoomIdentity.translate(tx, ty).scale(fitScale);
-          svg.call(zoom.transform, initialT);
-          updateLabelVisibility(fitScale);
+          const initialT = d3.zoomIdentity.translate(tx, ty).scale(fitScale); // สร้าง transform เริ่มต้น
+          svg.call(zoom.transform, initialT); // ใช้ transform เริ่มต้น
+          updateLabelVisibility(fitScale); // อัปเดตป้ายกำกับตาม scale เริ่มต้น
 
+          // ผูก event เข้ากับปุ่มรีเซ็ต
           btnReset.addEventListener('click', () => {
-            svg.transition().duration(300).call(zoom.transform, initialT);
+            svg.transition().duration(300).call(zoom.transform, initialT); // ทำให้การรีเซ็ตเป็น animation
           });
         });
       } catch (err) {
+        // แสดงข้อความ error หากมีข้อผิดพลาดเกิดขึ้น
         contentDisplay.innerHTML = `<p style="color:red">Failed to render DAG: ${err.message}</p>`;
       }
     }
 
-    // ===== Runtime renderer (domain 0..12, lane 1.3x, zoom/pan, fixed-size labels) =====
+    // ===== ส่วนแสดงผล Runtime (ไทม์ไลน์) =====
+    // คอมเมนต์นี้ระบุถึงฟังก์ชันที่สร้างไทม์ไลน์ (Gantt chart) ของ events
+    // - domain: ช่วงเวลาเริ่มต้นที่แสดงคือ 0-12ms
+    // - lane 1.3x: ความสูงของเลนถูกปรับให้สูงขึ้น 1.3 เท่า
+    // - zoom/pan: รองรับการซูมและแพนแบบพิเศษ
+    // - fixed-size labels: ป้ายกำกับมีขนาดคงที่และถูกจัดการไม่ให้ซ้อนทับกัน
     async function renderRuntimeView() {
+      // 1. ดึงข้อมูล (Fetch Data)
+      // ดึงข้อมูล runtime แบบละเอียดสำหรับ run และ worker ที่เลือก
       const data = await fetchOpTreeData(currentState.run, currentState.worker);
       if (!data || data.error) { contentDisplay.innerHTML = `<p style="color:red">Failed to load data. ${data ? data.error : ''}</p>`; return; }
 
+      // 2. เตรียมการแสดงผล (Prepare for Rendering)
       const stepKeys = Object.keys(data).sort((a,b)=> Number(a)-Number(b));
       if (!stepKeys.length) { contentDisplay.innerHTML = '<p>No runtime data.</p>'; return; }
 
-      contentDisplay.innerHTML = '';
-      const outerContainer = document.createElement('div'); outerContainer.style.width = '100%'; outerContainer.style.overflowX = 'auto';
+      contentDisplay.innerHTML = ''; // ล้างเนื้อหาเก่า
+      const outerContainer = document.createElement('div');
+      outerContainer.style.width = '100%';
+      outerContainer.style.overflowX = 'auto';
       contentDisplay.appendChild(outerContainer);
 
-      const domainMin = 0, domainMax = 12;  // <<< เปลี่ยนเป็น 0..12
+      // กำหนดช่วงเวลาเริ่มต้นที่จะแสดงผลบนแกน X (0 ถึง 12 ms)
+      const domainMin = 0, domainMax = 12;
       const domainSpan = domainMax - domainMin;
 
+      // 3. วนลูปเพื่อวาดไทม์ไลน์ของแต่ละ Step
       stepKeys.forEach(stepKey => {
         const step = data[stepKey];
 
-        // blocks
+        // 4. ประมวลผลและรวบรวม Events
+        // วนลูปข้อมูลดิบเพื่อรวบรวม events ทั้งหมด (computation และ communication)
+        // แล้วจัดเก็บใน array `compBlocks` และ `commBlocks` เพื่อให้วาดง่ายขึ้น
         const compBlocks = [], commBlocks = [];
         const pushComp = (name,s,e) => { const st=Number(s||0), ed=Number(e||s||0); compBlocks.push({name:name||'', start:st, end:ed, dur:ed-st}); };
         if (step.forward) (Array.isArray(step.forward)?step.forward:[step.forward]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
@@ -381,12 +431,13 @@
         if (step.backward) (Array.isArray(step.backward)?step.backward:[step.backward]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
         if (step.optimizer) (Array.isArray(step.optimizer)?step.optimizer:[step.optimizer]).forEach(it=>pushComp(it.name,it.start_time,it.end_time));
         (step.broadcasts||[]).forEach(ev=>{ const s=Number(ev.start_time||0), e=Number(ev.end_time||ev.start_time||0); commBlocks.push({name:'broadcast',start:s,end:e,dur:e-s}); });
+        // ฟังก์ชันที่วนซ้ำตัวเอง (recursive) เพื่อค้นหา event 'all_reduce' ที่ซ้อนอยู่ข้างใน
         (function collectAllReduce(events){ if(!Array.isArray(events))return; events.forEach(ev=>{ (ev.children||[]).forEach(ch=>{ if (ch.name==='nccl:all_reduce'||(ch.name&&ch.name.toLowerCase().includes('all_reduce'))) { commBlocks.push({name:ch.name||'all_reduce',start:Number(ch.start_time||0),end:Number(ch.end_time||ch.start_time||0),dur:Number(ch.dur||(ch.end_time-ch.start_time)||0)}); } }); collectAllReduce(ev.children||[]); }); })(step.backward||[]);
 
-        // layout
+        // 5. ตั้งค่า Layout และ SVG
         const margin = {top:20, right:24, bottom:70, left:160};
         const laneBase = 80;
-        const laneHeight = Math.round(laneBase * 1.3);   // <<< 1.3x ของเดิม
+        const laneHeight = Math.round(laneBase * 1.3); // ความสูงเลน = 1.3 เท่าของค่าพื้นฐาน
         const gap = 24;
 
         const wrapperWidth = Math.max(700, window.innerWidth - 360);
@@ -394,7 +445,7 @@
         const width = innerWidth + margin.left + margin.right;
         const height = margin.top + (laneHeight+gap)*2 - gap + margin.bottom;
 
-        // card
+        // สร้างโครงสร้างการ์ด, header, controls เหมือนกับมุมมอง DAG
         const card = document.createElement('div'); card.className = 'card';
         const header = document.createElement('div'); header.className='card-header';
         header.innerHTML = `<h4 class="card-title">Step ${stepKey}</h4>`;
@@ -414,7 +465,7 @@
         card.appendChild(header); card.appendChild(body);
         outerContainer.appendChild(card);
 
-        // svg
+        // สร้าง SVG element
         const svg = d3.select(svgWrap).append('svg')
           .attr('class','runtime-svg')
           .attr('width', width)
@@ -422,101 +473,97 @@
           .attr('viewBox', `0 0 ${width} ${height}`)
           .style('background','#fff');
 
-        // scales
+        // 6. D3 Scales และ แกน (Axes)
+        // สร้าง scale เชิงเส้นเพื่อแปลง domain เวลา (0-12ms) ไปเป็นตำแหน่งบนแกน X (pixel)
         const x = d3.scaleLinear().domain([domainMin, domainMax]).range([margin.left, margin.left + innerWidth]);
 
-        // lane positions (ไม่แสดงข้อความด้านซ้ายแล้ว ใช้ legend ด้านบนแทน)
+        // กำหนดตำแหน่ง Y สำหรับเลน 'Computation' และ 'Communication'
         const lanes = ['Computation','Communication'];
         const laneY = {};
         lanes.forEach((l,i) => { laneY[l] = margin.top + i*(laneHeight+gap); });
 
-        // axis (fixed pos)
+        // สร้างแกน X เริ่มต้นที่ด้านล่างของกราฟ
         const axisG = svg.append('g').attr('class','x-axis').attr('transform', `translate(0, ${margin.top + (laneHeight+gap)*lanes.length + 10})`);
-        axisG.call(d3.axisBottom(x).ticks(domainSpan + 1).tickFormat(d3.format('d')))  // <<< 0..12
+        axisG.call(d3.axisBottom(x).ticks(domainSpan + 1).tickFormat(d3.format('d')))
              .selectAll('text').attr('class','tick-text');
 
-        // clip (จำกัดพื้นที่แสดงผลไม่ให้ทับแกนล่างและป้ายด้านซ้าย)
+        // 7. สร้าง Clipping Path และ Group สำหรับซูม
+        // สร้าง clip path เพื่อจำกัดพื้นที่การวาด ไม่ให้แท่ง event ทับแกนหรือส่วนอื่น
         const axisYForClip = margin.top + (laneHeight+gap)*lanes.length + 10;
         const clipId = `clip-${stepKey}`.replace(/[^\w-]/g,'');
-        svg.append('defs')
-          .append('clipPath')
-          .attr('clipPathUnits','userSpaceOnUse')
-          .attr('id', clipId)
-          .append('rect')
-          .attr('x', margin.left)
-          .attr('y', 0)
-          .attr('width', innerWidth)
-          .attr('height', axisYForClip - 28);
+        svg.append('defs').append('clipPath').attr('id', clipId).append('rect')
+          .attr('x', margin.left).attr('y', 0).attr('width', innerWidth).attr('height', axisYForClip - 28);
 
-        // inner group (transformed)
+        // สร้าง group <g> ที่จะถูกซูมและแพน โดยมี clip-path ที่กำหนดไว้
         const inner = svg.append('g').attr('class','inner-group').attr('clip-path', `url(#${clipId})`);
 
-        // draw rects
+        // 8. วาดแท่งสี่เหลี่ยมของ Events
         const blocks = [];
         compBlocks.forEach(b => blocks.push(Object.assign({}, b, { lane:'Computation', y: laneY['Computation'] + 10 })));
         commBlocks.forEach(b => blocks.push(Object.assign({}, b, { lane:'Communication', y: laneY['Communication'] + 10 })));
 
+        // ผูกข้อมูล events เข้ากับ <rect> elements
         inner.selectAll('.block-rect')
-          .data(blocks, d => d.name + '_' + d.start + '_' + d.end)
-          .enter()
-          .append('rect')
-          .attr('class', d => 'block-rect ' + (d.lane === 'Computation' ? 'cm-box' : 'cp-box'))
-          .attr('x', d => Math.max(margin.left, x(d.start)))
+          .data(blocks, d => d.name + '_' + d.start + '_' + d.end).enter().append('rect')
+          .attr('class', d => 'block-rect ' + (d.lane === 'Computation' ? 'cm-box' : 'cp-box')) // กำหนดสีตามประเภท
+          .attr('x', d => Math.max(margin.left, x(d.start))) // ตำแหน่ง X ตามเวลาเริ่มต้น
           .attr('y', d => d.y)
-          .attr('width', d => Math.max(2, x(d.end) - x(d.start)))
+          .attr('width', d => Math.max(2, x(d.end) - x(d.start))) // ความกว้างตามระยะเวลา
           .attr('height', laneHeight - 20)
           .attr('rx', 6).attr('ry', 6)
+          // เพิ่ม event listener สำหรับแสดง tooltip เมื่อเมาส์ชี้
           .on('mouseover', function(event,d){ d3.select(this).style('filter','brightness(1.06)'); tooltip.style('display','block').html(`<strong>${escapeHtml(d.name)}</strong><br>start:${d.start.toFixed(4)} end:${d.end.toFixed(4)} dur:${(d.dur).toFixed(4)}`); })
           .on('mousemove', function(event){ tooltip.style('left', (event.pageX+12)+'px').style('top', (event.pageY+12)+'px'); })
           .on('mouseout', function(){ d3.select(this).style('filter',null); tooltip.style('display','none'); });
 
-        // labels overlay
+        // 9. สร้าง Overlay สำหรับป้ายกำกับ (Labels)
         const labelsOverlay = svg.append('g').attr('class','labels-overlay');
         const labelNodes = labelsOverlay.selectAll('.block-label')
-          .data(blocks, d => d.name + '_' + d.start + '_' + d.end)
-          .enter()
-          .append('text')
-          .attr('class','block-label')
-          .style('font-size','10px')
-          .attr('text-anchor','middle')
+          .data(blocks, d => d.name + '_' + d.start + '_' + d.end).enter().append('text')
+          .attr('class','block-label').style('font-size','10px').attr('text-anchor','middle')
           .text(d => truncateName(d.name, 40));
 
+        // 10. โลจิกการซูมและแพนขั้นสูง (Advanced Zoom/Pan Logic)
         const minLabelSpacing = 48;
         const maxZoom = 800;
 
         const zoom = d3.zoom()
-          .scaleExtent([1, maxZoom])                           // no zoom-out beyond initial
-          .translateExtent([[-10000, -10000], [10000, 10000]]) // allow pan
+          .scaleExtent([1, maxZoom]) // ไม่อนุญาตให้ซูมออกเกินค่าเริ่มต้น
+          .translateExtent([[-10000, -10000], [10000, 10000]]) // อนุญาตให้แพนได้กว้างๆ
           .on('zoom', (event) => {
-            let t = event.transform;
-            const k = t.k;
+            let t = event.transform; // transform ปัจจุบัน (scale, translate)
+            const k = t.k; // ค่า scale (ระดับการซูม)
 
-            // clamp tx so 0..12 ยังฟิตอยู่ (เมื่อ k=1 จะ pan ออกนอกไม่ได้)
+            // a. จำกัดการแพนแนวนอน (Clamp Horizontal Pan)
+            // เพื่อไม่ให้ผู้ใช้แพนจนช่วงเวลา 0-12 หลุดออกจากหน้าจอเมื่อซูม
             const maxTx = margin.left - k * x(domainMin);
             const minTx = (margin.left + innerWidth) - k * x(domainMax);
             let clampedTx = Math.max(minTx, Math.min(maxTx, t.x));
 
-            // ย่อแกน Y เมื่อซูมเข้า
+            // b. ย่อแกน Y เมื่อซูมเข้า
+            // ทำให้เลนแคบลงเมื่อซูมเข้า เพื่อให้เห็นภาพรวมได้ดีขึ้น
             let yScale = 1 / (1 + 0.6 * Math.max(0, k - 1));
             yScale = Math.max(0.25, Math.min(1, yScale));
 
-            // ป้องกันการชนกับแกนบน/ล่าง: clamp การเลื่อนแกน Y
+            // c. จำกัดการแพนแนวตั้ง (Clamp Vertical Pan)
+            // ป้องกันไม่ให้กราฟเลื่อนไปทับแกน X หรือลอยหายขึ้นไปข้างบน
             const axisBottomY = axisYForClip;
             const contentBottomDataY = laneY['Communication'] + (laneHeight - 10);
-            const paddingBottom = 14; // ระยะห่างขั้นต่ำจากแกนล่าง
-            const maxTy = axisBottomY - paddingBottom - yScale * contentBottomDataY; // เลื่อนลงได้มากสุด
-            // ขอบบน (กันไม่ให้ก้อนล้ำขึ้นไปจนชนขอบบน)
+            const paddingBottom = 14;
+            const maxTy = axisBottomY - paddingBottom - yScale * contentBottomDataY;
             const contentTopDataY = laneY['Computation'] + 10;
             const paddingTop = 10;
-            const minTy = paddingTop - yScale * contentTopDataY; // เลื่อนขึ้นได้น้อยสุด
+            const minTy = paddingTop - yScale * contentTopDataY;
             let clampedTy = Math.max(minTy, Math.min(t.y, maxTy));
 
-            // apply
+            // d. ใช้ Transform กับ Group
             inner.attr('transform', `translate(${clampedTx}, ${clampedTy}) scale(${k}, ${yScale})`);
 
-            // อัปเดตแกน X ให้ละเอียดขึ้นตาม zoom (ไม่มีเลขซ้ำ ๆ)
+            // e. อัปเดตแกน X แบบไดนามิก
+            // สร้าง scale ใหม่ที่ผ่านการซูมแล้ว
             const newX = d3.zoomIdentity.translate(clampedTx, 0).scale(k).rescaleX(x);
-            const tickCount = Math.max(2, Math.min(60, Math.floor((domainSpan + 1) * k))); // <<< อิง domain ใหม่
+            // คำนวณจำนวนขีด (tick) และทศนิยมบนแกน X ให้เหมาะสมกับระดับการซูม
+            const tickCount = Math.max(2, Math.min(60, Math.floor((domainSpan + 1) * k)));
             const tickVals = newX.ticks(tickCount);
             let decimals = 0;
             if (tickVals.length > 1) {
@@ -526,12 +573,13 @@
             const fmt = d3.format(`.${decimals}f`);
             axisG.call(d3.axisBottom(newX).tickValues(tickVals).tickFormat(d => fmt(d)))
                  .selectAll('text').attr('class','tick-text');
-            // ให้แกนอยู่ด้านบนเสมอหลังซูม/แพน
-            axisG.raise();
+            axisG.raise(); // ย้ายแกนมาไว้ข้างหน้าสุดเสมอ
 
-            // วาง label ให้ติดก้อน (ไม่ scale)
+            // f. จัดการการแสดงผลของป้ายกำกับ (Label Management)
+            // ส่วนนี้สำคัญมากเพื่อไม่ให้ป้ายกำกับซ้อนกันจนอ่านไม่ออก
             const labelPositions = [];
             labelNodes.each(function(d) {
+              // คำนวณตำแหน่งและขนาดของ event บนหน้าจอจริง
               const dataCenter = (d.start + d.end)/2;
               const screenX = clampedTx + k * x(dataCenter);
               const blockCenterY = d.y + (laneHeight - 20)/2;
@@ -541,25 +589,32 @@
               const screenW = Math.max(0, screenEnd - screenStart);
               labelPositions.push({node:this, x:screenX, y:Math.min(screenY, axisBottomY-12), w:screenW});
             });
-            labelPositions.sort((a,b)=> a.x - b.x);
+            labelPositions.sort((a,b)=> a.x - b.x); // เรียงตามตำแหน่ง X
             let lastX = -Infinity;
             labelPositions.forEach(p => {
               const node = d3.select(p.node);
-              if (p.w < 40 || (p.x - lastX) < minLabelSpacing) node.classed('hidden-label', true);
-              else { node.classed('hidden-label', false).attr('x', p.x).attr('y', p.y); lastX = p.x; }
+              // ซ่อนป้ายกำกับถ้า: (1) แท่ง event แคบไป หรือ (2) อยู่ใกล้กับป้ายกำกับก่อนหน้ามากไป
+              if (p.w < 40 || (p.x - lastX) < minLabelSpacing) {
+                node.classed('hidden-label', true);
+              } else {
+                node.classed('hidden-label', false).attr('x', p.x).attr('y', p.y);
+                lastX = p.x; // อัปเดตตำแหน่งของป้ายกำกับล่าสุดที่แสดง
+              }
             });
           });
 
-        svg.call(zoom);
-        // วางแกนไว้บนสุดเสมอ เพื่อไม่ให้ rect ไปทับตัวเลขแกน
+        svg.call(zoom); // เปิดใช้งาน zoom/pan บน SVG
+
+        // ฟังก์ชันสำหรับย้ายแกนมาไว้บนสุดเสมอ
         function bringAxisToFront(){ axisG.raise(); }
         bringAxisToFront();
 
-        // initial placement (identity): ฟิต 0..12 กับการ์ด และแก้บั๊ก label เริ่มต้น
+        // 11. ตั้งค่าการแสดงผลเริ่มต้น (Initial Placement)
+        // ฟังก์ชัน IIFE นี้จะทำงานครั้งเดียวเพื่อจัดวางป้ายกำกับให้ถูกต้องตั้งแต่ตอนโหลดเสร็จ
         (function initialUpdate() {
-          const t = d3.zoomIdentity;
+          const t = d3.zoomIdentity; // transform เริ่มต้น (ไม่ซูม ไม่แพน)
           inner.attr('transform', `translate(${t.x}, ${t.y}) scale(${t.k}, 1)`);
-          axisG.call(d3.axisBottom(t.rescaleX(x)).ticks(domainSpan + 1).tickFormat(d3.format('d'))) // 0..12
+          axisG.call(d3.axisBottom(t.rescaleX(x)).ticks(domainSpan + 1).tickFormat(d3.format('d')))
                .selectAll('text').attr('class','tick-text');
           axisG.raise();
           const axisBottomY = axisYForClip;
@@ -583,56 +638,88 @@
           });
         })();
 
-        // reset
+        // 12. ปุ่มรีเซ็ต (Reset Button)
+        // ผูก event เข้ากับปุ่มรีเซ็ต ให้กลับไปสู่สถานะเริ่มต้น (d3.zoomIdentity)
         btnReset.addEventListener('click', () => svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity));
 
+        // ฟังก์ชันเสริม
         function truncateName(name, max) { if (!name) return ''; return name.length > max ? name.slice(0, max-1) + '…' : name; }
         function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
       }); // end steps
     } // end renderRuntimeView
 
-    // --- Communication table (เดิม) ---
+    // ===== ส่วนแสดงผลตารางเปรียบเทียบเวลา Communication =====
+    // คอมเมนต์ระบุว่าส่วนนี้เป็นของมุมมองตารางเปรียบเทียบ
     async function renderCommunicationTable() {
+      // 1. ตรวจสอบ Cache หรือดึงข้อมูลใหม่
+      // ตรวจสอบว่าข้อมูล `commTimingCache` ถูกดึงมาเก็บไว้แล้วหรือยัง
       if (!commTimingCache) {
         try {
+          // หากยังไม่มีข้อมูลใน cache ให้ดึงข้อมูลจาก endpoint '/communication_timing'
           const response = await fetch('./communication_timing');
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          commTimingCache = await response.json();
+          if (!response.ok) throw new Error(`HTTP ${response.status}`); // ถ้าดึงไม่สำเร็จ ให้โยน error
+          commTimingCache = await response.json(); // เก็บข้อมูลที่ได้ลงในตัวแปร cache
         } catch (error) {
+          // หากเกิดข้อผิดพลาดในการดึงข้อมูล ให้แสดงข้อความ error
           contentDisplay.innerHTML = `<p style="color: red;">Failed to fetch communication timing data: ${error.message}</p>`; return;
         }
       }
+      // 2. สร้างและแสดงผล HTML
+      // เรียกใช้ฟังก์ชัน `createHtmlTableFromTimingData` เพื่อสร้าง HTML ของตาราง แล้วนำไปแสดงผล
       contentDisplay.innerHTML = createHtmlTableFromTimingData(commTimingCache);
     }
 
     function createHtmlTableFromTimingData(data) {
+      // จัดการกรณีที่ไม่มีข้อมูลที่จะแสดง
       if (!data || Object.keys(data).length === 0) return '<h3>Communication Timing Table</h3><p>No communication timing data available.</p>';
+
+      // 1. จัดกลุ่ม Runs
+      // โลจิกส่วนนี้จะจัดกลุ่ม run ต่างๆ เข้าด้วยกัน หาก run เหล่านั้นมีการทดสอบ communication algorithm ชุดเดียวกัน
+      // เช่น หากมี 2 run ที่ทดสอบ "Ring" และ "Tree" เหมือนกัน ทั้งสอง run จะถูกจัดให้อยู่ในตารางเดียวกัน
       const runGroups = {};
-      for (const runName in data) { const keys = Object.keys(data[runName]); const signature = keys.join(','); if (!runGroups[signature]) runGroups[signature] = []; runGroups[signature].push(runName); }
-      let finalHtml = ''; let tableCount = 0;
+      for (const runName in data) {
+        const keys = Object.keys(data[runName]); // เช่น ["Ring", "Tree"]
+        const signature = keys.join(','); // สร้าง "ลายเซ็น" เช่น "Ring,Tree"
+        if (!runGroups[signature]) runGroups[signature] = [];
+        runGroups[signature].push(runName); // จัดกลุ่ม run ที่มี signature เดียวกัน
+      }
+
+      // 2. สร้าง HTML สำหรับแต่ละกลุ่ม
+      let finalHtml = '';
+      let tableCount = 0;
+      // วนลูปในแต่ละกลุ่มของ run เพื่อสร้างตารางแยกกัน
       for (const signature in runGroups) {
         if (!signature) continue;
         tableCount++;
         const runsInGroup = runGroups[signature];
         const firstRunInGroup = runsInGroup[0];
-        const headers = Object.keys(data[firstRunInGroup]);
+        const headers = Object.keys(data[firstRunInGroup]); // ชื่อ algorithm จะกลายเป็นหัวตาราง
+
+        // 3. หาค่าที่น้อยที่สุด (Min Value) เพื่อทำไฮไลท์
+        // สำหรับแต่ละ algorithm (คอลัมน์) จะหาค่าที่น้อยที่สุดจากทุก run ในกลุ่มนั้น
         const minValues = {};
-        if (runsInGroup.length > 1) {
+        if (runsInGroup.length > 1) { // จะคำนวณก็ต่อเมื่อมีข้อมูลให้เปรียบเทียบ
           headers.forEach(header => {
             const values = runsInGroup.map(r => data[r][header]).filter(v => v !== undefined);
             if (values.length) minValues[header] = Math.min(...values);
           });
         }
+
+        // 4. สร้างโครงสร้างตาราง HTML
         finalHtml += `<div style="margin-bottom:18px"><h3>Communication Timing Table #${tableCount}</h3>`;
         let table = '<table class="timing-table">';
-        table += '<thead><tr><th>Communication Algorithm</th>';
+        // สร้างแถวหัวตาราง (header row)
+        table += '<thead><tr><th>Run Name</th>'; // เปลี่ยนจาก 'Communication Algorithm'
         headers.forEach(h => table += `<th>${h}</th>`);
         table += '</tr></thead><tbody>';
+
+        // สร้างแถวข้อมูลสำหรับแต่ละ run
         runsInGroup.forEach(runName => {
           table += `<tr><td>${runName}</td>`;
           const row = data[runName];
           headers.forEach(h => {
             const v = row[h];
+            // หากค่าในช่องเป็นค่าที่น้อยที่สุดในคอลัมน์ จะเพิ่ม class 'highlight-min' เพื่อไฮไลท์
             const highlightClass = (v !== undefined && v === minValues[h]) ? 'highlight-min' : '';
             table += `<td class="${highlightClass}">${v !== undefined ? v.toFixed(3) : 'N/A'}</td>`;
           });
@@ -641,7 +728,7 @@
         table += '</tbody></table></div>';
         finalHtml += table;
       }
-      return finalHtml;
+      return finalHtml; // คืนค่าเป็น string HTML ที่สมบูรณ์
     }
 
     initialize();
