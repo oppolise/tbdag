@@ -9,7 +9,7 @@ import json
 import re
 import tempfile
 from json.decoder import JSONDecodeError
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .. import io, utils
 from . import trace

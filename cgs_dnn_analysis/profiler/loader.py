@@ -3,11 +3,8 @@
 # -------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # --------------------------------------------------------------------------
-import bisect
 import os
 import sys
-from collections import defaultdict
-from typing import List, Tuple
 
 from .. import consts, io, utils
 # For simplicity, we will assume single process and not use the custom multiprocessing

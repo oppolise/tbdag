@@ -664,8 +664,6 @@ class CGSDNNAnalysisPlugin(base_plugin.TBPlugin):
         """Returns all operator trees data"""
         return self.respond_as_json(self.get_all_operator_trees())
 
-
-
     @wrappers.Request.application
     def communication_timing_route(self, request: werkzeug.Request):
         """

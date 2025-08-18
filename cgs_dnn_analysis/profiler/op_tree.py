@@ -303,8 +303,6 @@ class OpTreeBuilder:
     @staticmethod
     def _insert_backward_modules(root: OperatorNode, backward_modules: List[BackwardNode]):
         backward_modules.sort(key=lambda x: (x.start_time, -x.end_time))
-
-        # each item is (parent_node, child_index) that it is visiting.
         node_stack = []
         module_index = 0
         child_index = 0
@@ -319,41 +317,28 @@ class OpTreeBuilder:
                 staled_modules.append(module)
                 module_index += 1
                 continue
-
             if module.end_time < current_node.start_time:
                 staled_modules.append(module)
                 module_index += 1
                 continue
             elif module.start_time > current_node.end_time:
                 if node_stack:
-                    # pop parent node and update the child_index accordingly.
                     current_node, child_index = node_stack.pop()
                     child_index += 1
                 else:
-                    # if there is not item in stack, set it to None
                     current_node = None
                 continue
 
             while child_index < len(current_node.children):
                 if module.end_time < current_node.children[child_index].start_time:
-                    # if current module is before next child,
-                    # we will break the search and keep the child_index not change.
-                    # As the result, the module will be treated as child of 'current_node'
-                    # So that next time we can continue from here.
-                    # there is no any child contains the record.timestamp
-                    # child_find is False at this case.
                     break
                 elif module.start_time >= current_node.children[child_index].end_time:
                     child_index += 1
                 else:
-                    # current children contains the record
                     node_stack.append((current_node, child_index))
                     current_node = current_node.children[child_index]
                     child_index = 0
 
-            # when code execute here, it means the current_node will be the parent of backward module
-            # Add the module into current_node
             current_node.children.insert(child_index, module)
-            # since the children number is increased by 1, we need increment the child_index.
             child_index += 1
             module_index += 1
