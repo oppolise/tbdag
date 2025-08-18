@@ -1,4 +1,8 @@
 /.vscode
+/log
+/log_api
+debug.py
+tid2tree2.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
